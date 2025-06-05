@@ -16,7 +16,7 @@ serve(async (req) => {
   try {
     const { message, aiId } = await req.json();
 
-    console.log('Sending message to AI:', { message, aiId });
+    console.log('Received request:', { message: message?.substring(0, 100), aiId });
 
     const respellApiKey = Deno.env.get('RESPELL_API_KEY');
     
@@ -25,40 +25,56 @@ serve(async (req) => {
       throw new Error('RESPELL_API_KEY not configured');
     }
 
+    console.log('API key found, making request to Respell API...');
+
     // Make request to the specific AI model
+    const requestBody = {
+      spellId: aiId,
+      inputs: {
+        message: message
+      }
+    };
+
+    console.log('Request body:', JSON.stringify(requestBody, null, 2));
+
     const response = await fetch('https://api.respell.ai/v1/run', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${respellApiKey}`,
         'Content-Type': 'application/json',
+        'User-Agent': 'Supabase-Edge-Function'
       },
-      body: JSON.stringify({
-        spellId: aiId,
-        inputs: {
-          message: message
-        }
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     console.log('Respell API response status:', response.status);
+    console.log('Respell API response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Respell API Error:', response.status, errorText);
+      console.error('Respell API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
       throw new Error(`Respell API request failed: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('Respell API Response:', data);
+    console.log('Respell API Response:', JSON.stringify(data, null, 2));
 
     // Extract the response from the AI
     const aiResponse = data.outputs?.response || data.outputs?.message || data.response || 'Ne pare rău, nu am putut genera un răspuns.';
+
+    console.log('Extracted AI response:', aiResponse);
 
     return new Response(JSON.stringify({ response: aiResponse }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error in chat-with-ai function:', error);
+    console.error('Error stack:', error.stack);
+    
     return new Response(JSON.stringify({ 
       error: 'Ne pare rău, a apărut o eroare în comunicarea cu AI-ul.',
       details: error.message 
