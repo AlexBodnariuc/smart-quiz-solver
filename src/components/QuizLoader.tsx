@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Brain, Plus, PlayCircle, Clock, CheckCircle, Upload, Shuffle, RefreshCw, Trash2 } from 'lucide-react';
 import { QuizData, Question } from '@/pages/Index';
@@ -69,9 +70,8 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
       console.log(`Loaded ${questionsFromDatabase.length} unique questions from entire corpus`);
       setAllQuestions(questionsFromDatabase);
 
-      // Auto-generate 6 tests if we have enough questions and no Subiect tests exist
-      const existingSubjects = sessions.filter(s => s.title.startsWith('Subiect'));
-      if (questionsFromDatabase.length >= 300 && existingSubjects.length === 0) {
+      // Auto-generate 6 tests if we have enough questions and no tests exist
+      if (questionsFromDatabase.length >= 300 && sessions.length === 0) {
         console.log('Auto-generating 6 subject tests from entire corpus...');
         generateDiverseQuizzes(6, questionsFromDatabase);
       }
@@ -117,7 +117,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
 
       console.log(`Generating ${count} diverse quizzes from ${validQuestions.length} total available questions`);
 
-      // Delete existing subject quizzes first
+      // Delete existing subject quizzes first (if any)
       await deleteSubjectQuizzes();
 
       // Create a master pool of all unique questions
@@ -273,7 +273,16 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         await loadAllQuestionsFromDatabase();
         await loadTotalQuestionCount();
         
-        alert(`S-au încărcat ${quizData.questions.length} întrebări din fișierul ${file.name}! Acum sunt disponibile ${allQuestions.length + quizData.questions.length} întrebări pentru generarea testelor.`);
+        // Get updated question count after upload
+        const updatedQuestions = await getAllQuestionsFromDatabase();
+        
+        // Auto-generate tests if we have enough questions
+        if (updatedQuestions.length >= 300) {
+          console.log(`Auto-generating 6 tests from ${updatedQuestions.length} total questions...`);
+          await generateDiverseQuizzes(6, updatedQuestions);
+        }
+        
+        alert(`S-au încărcat ${quizData.questions.length} întrebări din fișierul ${file.name}! Acum sunt disponibile ${updatedQuestions.length} întrebări și s-au generat automat 6 teste diverse.`);
         
       } catch (error) {
         console.error('Error parsing JSON file:', error);
@@ -352,7 +361,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             {quizTitle}
           </h1>
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
-            Bun venit! Alege un test pentru a începe studiul.
+            Baza de date a fost resetată. Încarcă întrebări noi pentru a începe!
           </p>
           
           {/* Enhanced Question Statistics */}
@@ -409,7 +418,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           </div>
         )}
 
-        {/* Generated Subject Quizzes - Show only 6 */}
+        {/* Generated Subject Quizzes - Show only if they exist */}
         {subjectQuizzes.length > 0 && (
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-8">
             <h2 className="text-3xl font-bold text-white mb-8 text-center">Teste Generate (6 teste)</h2>
@@ -471,7 +480,22 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           </div>
         )}
 
-        {/* Load New Questions Section - Always show at bottom */}
+        {/* Welcome Message when no tests exist */}
+        {subjectQuizzes.length === 0 && allQuestions.length === 0 && (
+          <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-lg rounded-2xl p-8 border border-blue-400/30 mb-8 text-center">
+            <h2 className="text-3xl font-bold text-white mb-4">Începe cu Prima Încărcare</h2>
+            <p className="text-blue-100 text-lg mb-6">
+              Baza de date este goală. Încarcă un fișier JSON cu întrebări pentru a genera automat 6 teste diverse!
+            </p>
+            <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-4">
+              <p className="text-blue-200 text-sm">
+                💡 <strong>Sfat:</strong> Odată ce încarcați cel puțin 300 de întrebări, sistemul va genera automat 6 teste diverse cu câte 50 de întrebări fiecare.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Load New Questions Section - Always show */}
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10 mb-6">
           <div className="text-center">
             <h3 className="text-xl font-semibold text-white mb-4">Încarcă Întrebări Noi</h3>
@@ -506,13 +530,11 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
                   Selectează un fișier JSON cu întrebări noi pentru a le adăuga la baza de date și a regenera testele automat din întregul corpus
                 </p>
                 
-                {allQuestions.length > 0 && (
-                  <div className="bg-cyan-500/10 border border-cyan-400/30 rounded-lg p-4 mt-4">
-                    <p className="text-cyan-200 text-sm">
-                      💡 <strong>Sfat:</strong> După încărcarea întrebărilor noi, toate întrebările vor fi disponibile în baza de date și testele vor fi regenerate automat din întregul corpus de întrebări.
-                    </p>
-                  </div>
-                )}
+                <div className="bg-cyan-500/10 border border-cyan-400/30 rounded-lg p-4 mt-4">
+                  <p className="text-cyan-200 text-sm">
+                    💡 <strong>După încărcare:</strong> Toate întrebările vor fi stocate permanent în baza de date și se vor genera automat 6 teste diverse din întregul corpus disponibil.
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -522,8 +544,9 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
           <h3 className="text-lg font-semibold text-white mb-3">Despre Platformă:</h3>
           <div className="text-blue-100 space-y-2">
-            <p>• Toate întrebările sunt stocate permanent în baza de date</p>
-            <p>• 6 teste generate automat din întregul corpus de întrebări</p>
+            <p>• Baza de date a fost resetată pentru un început curat</p>
+            <p>• Toate întrebările încărcate sunt stocate permanent</p>
+            <p>• 6 teste generate automat la încărcarea întrebărilor (min. 300)</p>
             <p>• Fiecare test conține exact 50 de întrebări selectate din toate întrebările disponibile</p>
             <p>• Algoritmul asigură diversitatea maximă și utilizarea întregului corpus</p>
             <p>• Funcționalitate de deduplicare pentru optimizarea bazei de date</p>
