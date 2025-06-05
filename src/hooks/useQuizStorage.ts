@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { QuizData, Question } from '@/pages/Index';
@@ -135,27 +134,25 @@ export const useQuizStorage = () => {
     }
   };
 
-  // Enhanced function to get all unique questions from uploaded quiz sessions only
+  // Enhanced function to get ALL unique questions from the entire database
   const getAllQuestionsFromDatabase = async (): Promise<Question[]> => {
     setLoading(true);
     setError(null);
 
     try {
-      console.log('Loading all questions from uploaded quiz sessions...');
+      console.log('Loading ALL questions from the entire database...');
       
-      // Get all questions from quiz sessions that are NOT generated subject tests
-      // We identify uploaded quizzes by excluding ones that start with "Subiect"
+      // Get ALL questions from ALL quiz sessions (not just uploaded ones)
       const { data: questionsData, error: questionsError } = await supabase
         .from('quiz_session_questions')
         .select(`
           *,
           quiz_sessions!inner(title, created_at)
-        `)
-        .not('quiz_sessions.title', 'like', 'Subiect%');
+        `);
 
       if (questionsError) throw questionsError;
 
-      console.log(`Found ${questionsData?.length || 0} questions from uploaded quiz sessions`);
+      console.log(`Found ${questionsData?.length || 0} total questions in database`);
 
       if (!questionsData || questionsData.length === 0) {
         return [];
@@ -171,15 +168,19 @@ export const useQuizStorage = () => {
         passage: q.passage ? JSON.stringify(q.passage) : undefined
       }));
 
-      // Remove duplicates based on question text (more thorough deduplication)
+      // Enhanced deduplication: Remove duplicates based on question text and variants
       const uniqueQuestions = allQuestions.filter((question, index, self) => {
-        const firstIndex = self.findIndex(q => 
-          q.text.trim().toLowerCase() === question.text.trim().toLowerCase()
-        );
+        const firstIndex = self.findIndex(q => {
+          const normalizedText1 = q.text.trim().toLowerCase().replace(/\s+/g, ' ');
+          const normalizedText2 = question.text.trim().toLowerCase().replace(/\s+/g, ' ');
+          const sameText = normalizedText1 === normalizedText2;
+          const sameVariants = JSON.stringify(q.variants) === JSON.stringify(question.variants);
+          return sameText && sameVariants;
+        });
         return index === firstIndex;
       });
 
-      console.log(`After removing duplicates: ${uniqueQuestions.length} unique questions available for quiz generation`);
+      console.log(`After deduplication: ${uniqueQuestions.length} unique questions available from entire corpus`);
       return uniqueQuestions;
 
     } catch (err: any) {
@@ -254,6 +255,81 @@ export const useQuizStorage = () => {
     }
   };
 
+  // NEW: Function to deduplicate questions in the database
+  const deduplicateQuestions = async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('Starting database deduplication process...');
+      
+      // Get all questions with their sessions
+      const { data: allQuestions, error: fetchError } = await supabase
+        .from('quiz_session_questions')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      if (!allQuestions || allQuestions.length === 0) {
+        console.log('No questions found to deduplicate');
+        return;
+      }
+
+      console.log(`Found ${allQuestions.length} total questions, starting deduplication...`);
+
+      // Track unique questions and duplicates
+      const uniqueQuestions = new Map();
+      const duplicateIds = [];
+
+      for (const question of allQuestions) {
+        const normalizedText = question.question_text.trim().toLowerCase().replace(/\s+/g, ' ');
+        const variantsKey = JSON.stringify(question.variants);
+        const uniqueKey = `${normalizedText}|||${variantsKey}`;
+
+        if (uniqueQuestions.has(uniqueKey)) {
+          // This is a duplicate
+          duplicateIds.push(question.id);
+        } else {
+          // This is unique, keep it
+          uniqueQuestions.set(uniqueKey, question);
+        }
+      }
+
+      console.log(`Found ${duplicateIds.length} duplicate questions to remove`);
+
+      if (duplicateIds.length > 0) {
+        // Delete duplicate questions in batches
+        const batchSize = 100;
+        for (let i = 0; i < duplicateIds.length; i += batchSize) {
+          const batch = duplicateIds.slice(i, i + batchSize);
+          
+          const { error: deleteError } = await supabase
+            .from('quiz_session_questions')
+            .delete()
+            .in('id', batch);
+
+          if (deleteError) {
+            console.error('Error deleting duplicate questions:', deleteError);
+            throw deleteError;
+          }
+        }
+
+        console.log(`Successfully removed ${duplicateIds.length} duplicate questions`);
+      }
+
+      console.log(`Deduplication complete. ${uniqueQuestions.size} unique questions remain.`);
+
+    } catch (err: any) {
+      console.error('Error during deduplication:', err);
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to save quiz progress
   const saveQuizProgress = async (
     sessionId: string, 
     currentQuestionIndex: number, 
@@ -298,6 +374,7 @@ export const useQuizStorage = () => {
     }
   };
 
+  // Function to complete a quiz session
   const completeQuizSession = async (
     sessionId: string, 
     answers: Answer[], 
@@ -339,6 +416,7 @@ export const useQuizStorage = () => {
     getAllQuestionsFromDatabase,
     getTotalQuestionCount,
     deleteSubjectQuizzes,
+    deduplicateQuestions,
     saveQuizProgress,
     completeQuizSession
   };
