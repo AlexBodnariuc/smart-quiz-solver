@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
-import { Brain, Plus, PlayCircle, Clock, CheckCircle, Upload } from 'lucide-react';
-import { QuizData } from '@/pages/Index';
+import { Brain, Plus, PlayCircle, Clock, CheckCircle, Upload, Shuffle } from 'lucide-react';
+import { QuizData, Question } from '@/pages/Index';
 import { parseQuizJSON } from '@/utils/csvParser';
 import { useQuizStorage } from '@/hooks/useQuizStorage';
 
@@ -24,6 +24,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [sessions, setSessions] = useState<QuizSession[]>([]);
   const [showCreateOptions, setShowCreateOptions] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const { getUserQuizSessions, loadQuizSession, saveQuizSession, loading: storageLoading } = useQuizStorage();
 
   const quizTitle = "Medmentor, ajutorul tau AI pentru admitere";
@@ -35,6 +36,72 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   const loadUserSessions = async () => {
     const userSessions = await getUserQuizSessions();
     setSessions(userSessions);
+  };
+
+  const splitQuestionsIntoQuizzes = (questions: Question[], questionsPerQuiz = 50): Question[][] => {
+    const quizzes: Question[][] = [];
+    for (let i = 0; i < questions.length; i += questionsPerQuiz) {
+      quizzes.push(questions.slice(i, i + questionsPerQuiz));
+    }
+    return quizzes;
+  };
+
+  const generateSubjectQuizzes = async (count: number = 3) => {
+    setIsGenerating(true);
+    
+    try {
+      const storedQuestions = localStorage.getItem('quizQuestions');
+      
+      if (!storedQuestions) {
+        alert('Nu există întrebări stocate pentru a genera quiz-uri.');
+        return;
+      }
+
+      const questionData = JSON.parse(storedQuestions);
+      const allQuestions = parseQuizJSON(questionData, quizTitle).questions;
+      
+      // Filter out questions with no variants
+      const validQuestions = allQuestions.filter(
+        question => question.variants && question.variants.length > 0
+      );
+
+      if (validQuestions.length === 0) {
+        alert('Nu există întrebări valide pentru a genera quiz-uri.');
+        return;
+      }
+
+      // Split questions into chunks of 50
+      const questionChunks = splitQuestionsIntoQuizzes(validQuestions, 50);
+      
+      // Generate the requested number of quizzes
+      for (let i = 0; i < Math.min(count, questionChunks.length); i++) {
+        const quizQuestions = questionChunks[i];
+        const subjectNumber = sessions.filter(s => s.title.startsWith('Subiect')).length + 1 + i;
+        
+        const quizData: QuizData = {
+          id: `quiz-subiect-${subjectNumber}-${Date.now()}`,
+          title: `Subiect ${subjectNumber}`,
+          questions: quizQuestions
+        };
+
+        try {
+          await saveQuizSession(quizData);
+          console.log(`Generated Subiect ${subjectNumber} with ${quizQuestions.length} questions`);
+        } catch (error) {
+          console.error(`Error generating Subiect ${subjectNumber}:`, error);
+        }
+      }
+
+      // Refresh the sessions list
+      await loadUserSessions();
+      
+      alert(`S-au generat ${Math.min(count, questionChunks.length)} quiz-uri noi!`);
+    } catch (error) {
+      console.error('Error generating quizzes:', error);
+      alert('Eroare la generarea quiz-urilor.');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleCreateFromStorage = () => {
@@ -185,11 +252,41 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             {quizTitle}
           </h1>
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
-            Bun venit! Accesează quiz-urile salvate sau creează unul nou.
+            Bun venit! Accesează quiz-urile salvate sau creează unele noi.
           </p>
         </div>
 
-        {/* Quiz Sessions List - Now prominently displayed at top */}
+        {/* Generate Subject Quizzes Button - Prominent placement */}
+        {hasStoredQuestions() && (
+          <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-lg rounded-2xl p-6 border border-purple-400/30 mb-8">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white mb-4">Generează Quiz-uri pe Subiecte</h2>
+              <p className="text-purple-100 mb-6">
+                Împarte întrebările în quiz-uri de câte 50 de întrebări pentru studiu focalizat
+              </p>
+              <div className="flex gap-4 justify-center">
+                <button
+                  onClick={() => generateSubjectQuizzes(3)}
+                  disabled={isGenerating || storageLoading}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                >
+                  <Shuffle className="h-5 w-5" />
+                  {isGenerating ? 'Se generează...' : 'Generează 3 Quiz-uri'}
+                </button>
+                <button
+                  onClick={() => generateSubjectQuizzes(5)}
+                  disabled={isGenerating || storageLoading}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-indigo-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                >
+                  <Shuffle className="h-5 w-5" />
+                  {isGenerating ? 'Se generează...' : 'Generează 5 Quiz-uri'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quiz Sessions List */}
         {sessions.length > 0 && (
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-8">
             <h2 className="text-3xl font-bold text-white mb-8 text-center">Quiz-uri Disponibile</h2>
@@ -227,7 +324,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           </div>
         )}
 
-        {/* Create New Quiz Section - Now less prominent at bottom */}
+        {/* Create New Quiz Section */}
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10 mb-6">
           <div className="text-center">
             <button
@@ -287,6 +384,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           <h3 className="text-lg font-semibold text-white mb-3">Despre Platformă:</h3>
           <div className="text-blue-100 space-y-2">
             <p>• Quiz-uri personalizate pentru admiterea la medicină</p>
+            <p>• Quiz-uri pe subiecte de câte 50 de întrebări pentru studiu eficient</p>
             <p>• Progresul este salvat automat în cloud</p>
             <p>• Accesează quiz-urile de pe orice dispozitiv</p>
             <p>• Explicații detaliate pentru fiecare răspuns</p>
