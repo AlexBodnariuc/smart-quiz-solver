@@ -85,40 +85,6 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     }
   };
 
-  const loadSampleQuiz = () => {
-    const sampleQuiz: QuizData = {
-      id: "sample-quiz",
-      title: "Quiz Demo - Cunoștințe Generale",
-      questions: [
-        {
-          id: "q1",
-          text: "Care este capitala României?",
-          variants: ["Cluj-Napoca", "București", "Iași", "Constanța"],
-          correctAnswer: 1,
-          passage: "România este o țară din Europa de Sud-Est, cunoscută pentru istoria sa bogată și peisajele diverse. Capitala țării este un centru important economic și cultural.",
-          explanation: "București este capitala și cel mai mare oraș al României, cu o populație de aproximativ 2 milioane de locuitori în zona metropolitană."
-        },
-        {
-          id: "q2",
-          text: "În ce an a avut loc Revoluția Română?",
-          variants: ["1987", "1988", "1989", "1990"],
-          correctAnswer: 2,
-          explanation: "Revoluția Română a avut loc în decembrie 1989, fiind evenimentul care a dus la căderea regimului comunist condus de Nicolae Ceaușescu."
-        },
-        {
-          id: "q3",
-          text: "Care este cel mai lung râu din România?",
-          variants: ["Mureș", "Olt", "Dunărea", "Prut"],
-          correctAnswer: 2,
-          passage: "România este străbătută de numeroase râuri importante. Dunărea, care își are izvoarele în Pădurea Neagră din Germania, traversează mai multe țări europene.",
-          explanation: "Dunărea este cel mai lung râu din România, cu o lungime de aproximativ 1.075 km pe teritoriul țării noastre."
-        }
-      ]
-    };
-
-    onQuizLoad(sampleQuiz);
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="max-w-4xl w-full">
@@ -212,27 +178,6 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             </button>
           </div>
         )}
-
-        {/* Demo Option */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-6 border border-white/20 text-center mb-6">
-          <div className="flex flex-col items-center">
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-3 rounded-xl mb-3">
-              <FileText className="h-6 w-6 text-white" />
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-2">
-              Sau Încearcă Quiz Demo
-            </h3>
-            <p className="text-blue-100 text-sm mb-4">
-              Testează platforma cu un quiz de demonstrație
-            </p>
-            <button
-              onClick={loadSampleQuiz}
-              className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
-            >
-              Încarcă Demo
-            </button>
-          </div>
-        </div>
 
         {/* Loading State */}
         {isLoading && (
