@@ -1,6 +1,7 @@
+
 import { QuizData } from '@/pages/Index';
 import { Answer } from './Quiz';
-import { Trophy, RotateCcw, CheckCircle, XCircle, Target } from 'lucide-react';
+import { Trophy, RotateCcw, CheckCircle, XCircle, Target, SkipForward } from 'lucide-react';
 
 interface QuizResultsProps {
   quizData: QuizData;
@@ -10,6 +11,8 @@ interface QuizResultsProps {
 
 export const QuizResults = ({ quizData, answers, onRestart }: QuizResultsProps) => {
   const correctAnswers = answers.filter(a => a.isCorrect).length;
+  const skippedAnswers = answers.filter(a => a.skipped).length;
+  const incorrectAnswers = answers.filter(a => !a.isCorrect && !a.skipped).length;
   const totalQuestions = quizData.questions.length;
   const scorePercentage = (correctAnswers / totalQuestions) * 100;
 
@@ -69,7 +72,7 @@ export const QuizResults = ({ quizData, answers, onRestart }: QuizResultsProps) 
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-4 gap-6">
             <div className="bg-white/10 rounded-2xl p-4">
               <div className="flex items-center justify-center mb-2">
                 <CheckCircle className="h-8 w-8 text-green-400" />
@@ -82,8 +85,16 @@ export const QuizResults = ({ quizData, answers, onRestart }: QuizResultsProps) 
               <div className="flex items-center justify-center mb-2">
                 <XCircle className="h-8 w-8 text-red-400" />
               </div>
-              <div className="text-2xl font-bold text-red-400">{totalQuestions - correctAnswers}</div>
+              <div className="text-2xl font-bold text-red-400">{incorrectAnswers}</div>
               <div className="text-blue-100">Greșite</div>
+            </div>
+            
+            <div className="bg-white/10 rounded-2xl p-4">
+              <div className="flex items-center justify-center mb-2">
+                <SkipForward className="h-8 w-8 text-yellow-400" />
+              </div>
+              <div className="text-2xl font-bold text-yellow-400">{skippedAnswers}</div>
+              <div className="text-blue-100">Sărite</div>
             </div>
             
             <div className="bg-white/10 rounded-2xl p-4">
@@ -104,15 +115,30 @@ export const QuizResults = ({ quizData, answers, onRestart }: QuizResultsProps) 
             {quizData.questions.map((question, index) => {
               const answer = answers.find(a => a.questionId === question.id);
               const isCorrect = answer?.isCorrect || false;
+              const isSkipped = answer?.skipped || false;
+              
+              let statusIcon;
+              let statusColor;
+              
+              if (isSkipped) {
+                statusIcon = <SkipForward className="h-5 w-5" />;
+                statusColor = 'bg-yellow-500';
+              } else if (isCorrect) {
+                statusIcon = <CheckCircle className="h-5 w-5" />;
+                statusColor = 'bg-green-500';
+              } else {
+                statusIcon = <XCircle className="h-5 w-5" />;
+                statusColor = 'bg-red-500';
+              }
               
               return (
                 <div key={question.id} className="bg-white/5 rounded-2xl p-6 border border-white/10">
                   <div className="flex items-start gap-4">
                     <div className={`
                       w-8 h-8 rounded-lg flex items-center justify-center font-bold
-                      ${isCorrect ? 'bg-green-500' : 'bg-red-500'}
+                      ${statusColor}
                     `}>
-                      {isCorrect ? <CheckCircle className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
+                      {statusIcon}
                     </div>
                     
                     <div className="flex-1">
@@ -123,12 +149,32 @@ export const QuizResults = ({ quizData, answers, onRestart }: QuizResultsProps) 
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
                           <p className="text-blue-100 text-sm mb-1">Răspunsul tău:</p>
-                          <p className={`font-medium ${isCorrect ? 'text-green-300' : 'text-red-300'}`}>
-                            {answer ? question.variants[answer.selectedAnswer] : 'Nu ai răspuns'}
+                          <p className={`font-medium ${
+                            isSkipped 
+                              ? 'text-yellow-300' 
+                              : isCorrect 
+                                ? 'text-green-300' 
+                                : 'text-red-300'
+                          }`}>
+                            {isSkipped 
+                              ? 'Întrebare sărită' 
+                              : answer && answer.selectedAnswer >= 0
+                                ? question.variants[answer.selectedAnswer] 
+                                : 'Nu ai răspuns'
+                            }
                           </p>
                         </div>
                         
-                        {!isCorrect && (
+                        {!isCorrect && !isSkipped && (
+                          <div>
+                            <p className="text-blue-100 text-sm mb-1">Răspunsul corect:</p>
+                            <p className="text-green-300 font-medium">
+                              {question.variants[question.correctAnswer]}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {isSkipped && (
                           <div>
                             <p className="text-blue-100 text-sm mb-1">Răspunsul corect:</p>
                             <p className="text-green-300 font-medium">
