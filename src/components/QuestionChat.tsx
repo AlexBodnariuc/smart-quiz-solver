@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Question } from '@/pages/Index';
 import { MessageCircle, Send, X, Bot, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   id: string;
@@ -48,22 +49,21 @@ te rog ajuta-ma sa inteleg mai bine`;
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat-with-ai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('chat-with-ai', {
+        body: {
           message: isInitial ? message : message,
           aiId: 'resp_6841cc306930819cbee23d3a2efe2ebe0e06ca3050f39bc8'
-        }),
+        }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to get AI response');
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw new Error(error.message || 'Failed to get AI response');
       }
 
-      const data = await response.json();
+      if (!data || !data.response) {
+        throw new Error('Invalid response from AI service');
+      }
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
