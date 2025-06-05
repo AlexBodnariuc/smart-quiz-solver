@@ -1,7 +1,8 @@
 
 import { useState } from 'react';
-import { Brain } from 'lucide-react';
+import { Brain, Upload } from 'lucide-react';
 import { QuizData } from '@/pages/Index';
+import { parseQuizJSON } from '@/utils/csvParser';
 
 interface QuizLoaderProps {
   onQuizLoad: (data: QuizData) => void;
@@ -9,28 +10,83 @@ interface QuizLoaderProps {
 
 export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
 
   // Fixed quiz title
   const quizTitle = "Medmentor, ajutorul tau AI pentru admitere";
 
-  // Mock function to simulate loading quiz from database
+  // Check if there are stored questions in localStorage
+  const hasStoredQuestions = () => {
+    const stored = localStorage.getItem('quizQuestions');
+    return stored && JSON.parse(stored).length > 0;
+  };
+
+  // Load quiz from localStorage (simulating database)
   const loadQuizFromDatabase = () => {
     setIsLoading(true);
     
     // Simulate API call delay
     setTimeout(() => {
-      // For now, create a sample quiz structure
-      // In a real implementation, this would fetch from your database
-      const mockQuizData: QuizData = {
-        id: `quiz-${Date.now()}`,
-        title: quizTitle,
-        questions: []
-      };
+      const storedQuestions = localStorage.getItem('quizQuestions');
       
-      console.log('Loading quiz from database:', mockQuizData);
-      onQuizLoad(mockQuizData);
+      if (storedQuestions) {
+        try {
+          const questionData = JSON.parse(storedQuestions);
+          const quizData = parseQuizJSON(questionData, quizTitle);
+          console.log('Loading quiz from storage:', quizData);
+          console.log('Number of questions loaded:', quizData.questions.length);
+          onQuizLoad(quizData);
+        } catch (error) {
+          console.error('Error parsing stored questions:', error);
+          // Create empty quiz if parsing fails
+          const emptyQuiz: QuizData = {
+            id: `quiz-${Date.now()}`,
+            title: quizTitle,
+            questions: []
+          };
+          onQuizLoad(emptyQuiz);
+        }
+      } else {
+        // No stored questions, create empty quiz
+        const emptyQuiz: QuizData = {
+          id: `quiz-${Date.now()}`,
+          title: quizTitle,
+          questions: []
+        };
+        console.log('No stored questions found, creating empty quiz');
+        onQuizLoad(emptyQuiz);
+      }
+      
       setIsLoading(false);
     }, 1000);
+  };
+
+  // Handle JSON file upload
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const jsonData = JSON.parse(e.target?.result as string);
+        console.log('Uploaded JSON data:', jsonData);
+        
+        // Store in localStorage (simulating database save)
+        localStorage.setItem('quizQuestions', JSON.stringify(jsonData));
+        console.log('Questions saved to storage');
+        
+        // Parse and load the quiz
+        const quizData = parseQuizJSON(jsonData, quizTitle);
+        console.log('Parsed quiz data:', quizData);
+        onQuizLoad(quizData);
+        setShowUpload(false);
+      } catch (error) {
+        console.error('Error parsing JSON file:', error);
+        alert('Eroare la citirea fișierului JSON. Verificați formatul.');
+      }
+    };
+    reader.readAsText(file);
   };
 
   return (
@@ -53,21 +109,56 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
 
         {/* Load Quiz Button */}
         <div className="text-center mb-6">
-          <button
-            onClick={loadQuizFromDatabase}
-            disabled={isLoading}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
-              <>
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                Se încarcă quiz-ul...
-              </>
-            ) : (
-              'Începe Quiz-ul'
-            )}
-          </button>
+          {hasStoredQuestions() ? (
+            <button
+              onClick={loadQuizFromDatabase}
+              disabled={isLoading}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                  Se încarcă quiz-ul...
+                </>
+              ) : (
+                'Începe Quiz-ul'
+              )}
+            </button>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-white mb-4">Nu există întrebări în baza de date. Încărcați un fișier JSON cu întrebări.</p>
+              <button
+                onClick={() => setShowUpload(!showUpload)}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                <Upload className="h-6 w-6" />
+                Încarcă Întrebări JSON
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Upload Section */}
+        {showUpload && (
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 text-center mb-6">
+            <div className="mb-4">
+              <label htmlFor="json-upload" className="cursor-pointer">
+                <div className="border-2 border-dashed border-white/30 rounded-xl p-8 hover:border-white/50 transition-colors">
+                  <Upload className="h-12 w-12 text-white mx-auto mb-4" />
+                  <p className="text-white text-lg mb-2">Selectează fișierul JSON cu întrebările</p>
+                  <p className="text-blue-200 text-sm">Fișierul trebuie să conțină un array de obiecte cu întrebări</p>
+                </div>
+                <input
+                  id="json-upload"
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+        )}
 
         {/* Loading State */}
         {isLoading && (
