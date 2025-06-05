@@ -46,17 +46,17 @@ export const PassageDisplay = ({ chunks }: PassageDisplayProps) => {
             <div className="text-sm text-gray-300">
               <div className="flex flex-wrap items-center gap-2">
                 {chunk.source && (
-                  <span className="font-medium">
-                    {chunk.source}
+                  <span className="font-medium text-cyan-300">
+                    📚 {chunk.source}
                   </span>
                 )}
                 {chunk.page && (
-                  <span>
-                    - Pagina {chunk.page}
+                  <span className="text-blue-200">
+                    📄 Pagina {chunk.page}
                   </span>
                 )}
                 {chunk.score && (
-                  <span className="ml-auto text-xs opacity-70">
+                  <span className="ml-auto text-xs opacity-70 bg-white/10 px-2 py-1 rounded">
                     Relevanță: {(chunk.score * 100).toFixed(0)}%
                   </span>
                 )}
