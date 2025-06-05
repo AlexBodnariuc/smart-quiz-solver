@@ -18,6 +18,9 @@ interface JSONQuestionData {
         source?: string;
       };
       score?: number;
+      bookTitle?: string;
+      page?: number;
+      relevanceScore?: number;
     }>;
   };
 }
@@ -26,6 +29,7 @@ export interface ProcessedChunk {
   text: string;
   page?: number;
   source?: string;
+  bookTitle?: string;
   score?: number;
 }
 
@@ -61,12 +65,13 @@ export const parseQuizJSON = (jsonData: JSONQuestionData[], quizTitle: string): 
     
     console.log(`Question ${index + 1} correct answer index:`, correctAnswerIndex);
     
-    // Process relevant chunks
+    // Process relevant chunks with proper field mapping
     const processedChunks: ProcessedChunk[] = item.agentResponse.relevantChunks?.map(chunk => ({
       text: chunk.text,
-      page: chunk.metadata?.page,
+      page: chunk.page || chunk.metadata?.page,
       source: chunk.metadata?.source,
-      score: chunk.score
+      bookTitle: chunk.bookTitle,
+      score: chunk.score || chunk.relevanceScore
     })) || [];
     
     const question: Question = {

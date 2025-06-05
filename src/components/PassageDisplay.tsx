@@ -38,20 +38,27 @@ export const PassageDisplay = ({ chunks }: PassageDisplayProps) => {
         {topChunks.map((chunk, index) => (
           <div
             key={index}
-            className={`rounded-xl p-4 border ${getRelevanceColor(chunk.score)}`}
+            className={`rounded-xl p-5 border ${getRelevanceColor(chunk.score)}`}
           >
-            <blockquote className={`${getTextColor(chunk.score)} leading-relaxed mb-3 italic`}>
-              "{chunk.text}"
-            </blockquote>
-            <div className="text-sm text-gray-300">
-              <div className="flex flex-wrap items-center gap-2">
-                {chunk.source && (
-                  <span className="font-medium text-cyan-300">
-                    📚 {chunk.source}
+            {/* Quote styling with proper quotation marks */}
+            <div className="relative">
+              <div className="text-4xl text-cyan-300/30 absolute -top-2 -left-1">"</div>
+              <blockquote className={`${getTextColor(chunk.score)} leading-relaxed mb-4 italic pl-6 pr-4`}>
+                {chunk.text}
+              </blockquote>
+              <div className="text-4xl text-cyan-300/30 absolute -bottom-2 right-0">"</div>
+            </div>
+            
+            {/* Book information */}
+            <div className="text-sm text-gray-300 mt-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {chunk.bookTitle && (
+                  <span className="font-medium text-cyan-300 flex items-center gap-1">
+                    📚 {chunk.bookTitle}
                   </span>
                 )}
                 {chunk.page && (
-                  <span className="text-blue-200">
+                  <span className="text-blue-200 flex items-center gap-1">
                     📄 Pagina {chunk.page}
                   </span>
                 )}
