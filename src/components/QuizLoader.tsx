@@ -71,7 +71,8 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
       setAllQuestions(questionsFromDatabase);
 
       // Auto-generate 6 tests if we have enough questions and no tests exist
-      if (questionsFromDatabase.length >= 300 && sessions.length === 0) {
+      // Updated to work with 150+ questions instead of requiring 300
+      if (questionsFromDatabase.length >= 150 && sessions.length === 0) {
         console.log('Auto-generating 6 subject tests from entire corpus...');
         generateDiverseQuizzes(6, questionsFromDatabase);
       }
@@ -110,8 +111,9 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         question => question.variants && question.variants.length > 0
       );
 
-      if (validQuestions.length < 300) {
-        alert(`Nu există suficiente întrebări valide. Sunt disponibile ${validQuestions.length}, dar sunt necesare cel puțin 300 pentru 6 teste diverse.`);
+      // Updated minimum requirement to work with smaller question sets
+      if (validQuestions.length < 150) {
+        alert(`Nu există suficiente întrebări valide. Sunt disponibile ${validQuestions.length}, dar sunt necesare cel puțin 150 pentru a genera 6 teste.`);
         return;
       }
 
@@ -124,31 +126,40 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
       const masterQuestionPool = [...validQuestions];
       console.log(`Master question pool contains ${masterQuestionPool.length} questions`);
       
-      // Generate exactly 6 quizzes with maximum diversity
+      // Generate exactly 6 quizzes with maximum diversity possible
       for (let i = 0; i < count; i++) {
         // Create a deep shuffle of the entire pool for each quiz
         const shuffledPool = [...masterQuestionPool]
           .sort(() => Math.random() - 0.5)
           .sort(() => Math.random() - 0.5); // Double shuffle for better randomization
         
-        // Take exactly 50 questions from different parts of the shuffled pool
+        // Take exactly 50 questions using different starting points for each quiz
         const quizQuestions: Question[] = [];
-        const stepSize = Math.floor(shuffledPool.length / 50);
+        const questionsNeeded = Math.min(50, shuffledPool.length);
         
-        // Distribute selection across the entire corpus
-        for (let j = 0; j < 50 && j < shuffledPool.length; j++) {
-          const index = (j * stepSize + Math.floor(Math.random() * stepSize)) % shuffledPool.length;
+        // Use different starting points and step sizes for each quiz to maximize diversity
+        const startOffset = i * Math.floor(shuffledPool.length / count);
+        const stepSize = Math.max(1, Math.floor(shuffledPool.length / questionsNeeded));
+        
+        for (let j = 0; j < questionsNeeded; j++) {
+          const index = (startOffset + j * stepSize) % shuffledPool.length;
           if (shuffledPool[index] && !quizQuestions.find(q => q.text === shuffledPool[index].text)) {
             quizQuestions.push(shuffledPool[index]);
           }
         }
         
-        // If we don't have enough, fill with random questions from the pool
-        while (quizQuestions.length < 50 && quizQuestions.length < shuffledPool.length) {
+        // If we don't have enough unique questions, fill with random questions from the pool
+        while (quizQuestions.length < questionsNeeded) {
           const randomQuestion = shuffledPool[Math.floor(Math.random() * shuffledPool.length)];
           if (!quizQuestions.find(q => q.text === randomQuestion.text)) {
             quizQuestions.push(randomQuestion);
+          } else {
+            // If we've exhausted unique questions, allow some overlap
+            quizQuestions.push(randomQuestion);
           }
+          
+          // Safety break to prevent infinite loop
+          if (quizQuestions.length >= questionsNeeded) break;
         }
 
         // Final shuffle of the selected questions
@@ -174,7 +185,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
       await loadUserSessions();
       await loadTotalQuestionCount();
       
-      alert(`S-au generat ${count} quiz-uri noi cu câte 50 de întrebări din întregul corpus de ${validQuestions.length} întrebări!`);
+      alert(`S-au generat ${count} quiz-uri noi cu câte ${Math.min(50, validQuestions.length)} de întrebări din întregul corpus de ${validQuestions.length} întrebări!`);
     } catch (error) {
       console.error('Error generating quizzes:', error);
       alert('Eroare la generarea quiz-urilor.');
@@ -276,8 +287,8 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         // Get updated question count after upload
         const updatedQuestions = await getAllQuestionsFromDatabase();
         
-        // Auto-generate tests if we have enough questions
-        if (updatedQuestions.length >= 300) {
+        // Auto-generate tests if we have enough questions (lowered requirement)
+        if (updatedQuestions.length >= 150) {
           console.log(`Auto-generating 6 tests from ${updatedQuestions.length} total questions...`);
           await generateDiverseQuizzes(6, updatedQuestions);
         }
@@ -361,7 +372,10 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             {quizTitle}
           </h1>
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
-            Baza de date a fost resetată. Încarcă întrebări noi pentru a începe!
+            {allQuestions.length > 0 
+              ? `Ai ${allQuestions.length} întrebări disponibile! ${subjectQuizzes.length === 0 ? 'Generează 6 teste acum!' : ''}`
+              : 'Baza de date a fost resetată. Încarcă întrebări noi pentru a începe!'
+            }
           </p>
           
           {/* Enhanced Question Statistics */}
@@ -418,6 +432,26 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           </div>
         )}
 
+        {/* Manual Generate Button - Show when we have questions but no tests */}
+        {allQuestions.length >= 150 && subjectQuizzes.length === 0 && !isGenerating && (
+          <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 backdrop-blur-lg rounded-2xl p-8 border border-green-400/30 mb-8">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold text-white mb-4">Gata să Generezi Testele!</h2>
+              <p className="text-green-100 text-lg mb-6">
+                Ai {allQuestions.length} întrebări disponibile. Generează acum 6 teste diverse cu câte 50 de întrebări!
+              </p>
+              <button
+                onClick={() => generateDiverseQuizzes(6)}
+                disabled={isGenerating || storageLoading || isDeduplicating}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-blue-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+              >
+                <Shuffle className="h-6 w-6" />
+                {isGenerating ? 'Se generează...' : 'Generează 6 Teste Acum!'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Generated Subject Quizzes - Show only if they exist */}
         {subjectQuizzes.length > 0 && (
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-8">
@@ -451,7 +485,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             </div>
             
             {/* Control Buttons */}
-            {allQuestions.length >= 300 && (
+            {allQuestions.length >= 150 && (
               <div className="text-center mt-8 space-y-4">
                 <div className="flex flex-wrap gap-4 justify-center">
                   <button
@@ -489,7 +523,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             </p>
             <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-4">
               <p className="text-blue-200 text-sm">
-                💡 <strong>Sfat:</strong> Odată ce încarcați cel puțin 300 de întrebări, sistemul va genera automat 6 teste diverse cu câte 50 de întrebări fiecare.
+                💡 <strong>Sfat:</strong> Odată ce încarcați cel puțin 150 de întrebări, sistemul va genera automat 6 teste diverse cu câte 50 de întrebări fiecare.
               </p>
             </div>
           </div>
@@ -544,9 +578,9 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
           <h3 className="text-lg font-semibold text-white mb-3">Despre Platformă:</h3>
           <div className="text-blue-100 space-y-2">
-            <p>• Baza de date a fost resetată pentru un început curat</p>
+            <p>• Ai acum {allQuestions.length} întrebări unice în baza de date</p>
             <p>• Toate întrebările încărcate sunt stocate permanent</p>
-            <p>• 6 teste generate automat la încărcarea întrebărilor (min. 300)</p>
+            <p>• 6 teste generate automat cu minimum 150 de întrebări</p>
             <p>• Fiecare test conține exact 50 de întrebări selectate din toate întrebările disponibile</p>
             <p>• Algoritmul asigură diversitatea maximă și utilizarea întregului corpus</p>
             <p>• Funcționalitate de deduplicare pentru optimizarea bazei de date</p>

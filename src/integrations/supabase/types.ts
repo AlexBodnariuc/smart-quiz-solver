@@ -9,6 +9,50 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      meter_reading_requests: {
+        Row: {
+          completed_at: string | null
+          conversation_id: string | null
+          id: string
+          image_url: string | null
+          meter_type: string
+          reading_value: number | null
+          requested_at: string | null
+          status: string | null
+          tenant_name: string
+        }
+        Insert: {
+          completed_at?: string | null
+          conversation_id?: string | null
+          id?: string
+          image_url?: string | null
+          meter_type: string
+          reading_value?: number | null
+          requested_at?: string | null
+          status?: string | null
+          tenant_name: string
+        }
+        Update: {
+          completed_at?: string | null
+          conversation_id?: string | null
+          id?: string
+          image_url?: string | null
+          meter_type?: string
+          reading_value?: number | null
+          requested_at?: string | null
+          status?: string | null
+          tenant_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_reading_requests_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pdf_processing_jobs: {
         Row: {
           created_at: string
@@ -219,6 +263,83 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      whatsapp_conversations: {
+        Row: {
+          created_at: string | null
+          id: string
+          last_message: string | null
+          last_message_time: string | null
+          phone_number: string
+          status: string | null
+          tenant_name: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          last_message?: string | null
+          last_message_time?: string | null
+          phone_number: string
+          status?: string | null
+          tenant_name?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          last_message?: string | null
+          last_message_time?: string | null
+          phone_number?: string
+          status?: string | null
+          tenant_name?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_messages: {
+        Row: {
+          content: string
+          conversation_id: string | null
+          id: string
+          is_read: boolean | null
+          message_id: string | null
+          message_type: string | null
+          metadata: Json | null
+          sender: string
+          timestamp: string | null
+        }
+        Insert: {
+          content: string
+          conversation_id?: string | null
+          id?: string
+          is_read?: boolean | null
+          message_id?: string | null
+          message_type?: string | null
+          metadata?: Json | null
+          sender: string
+          timestamp?: string | null
+        }
+        Update: {
+          content?: string
+          conversation_id?: string | null
+          id?: string
+          is_read?: boolean | null
+          message_id?: string | null
+          message_type?: string | null
+          metadata?: Json | null
+          sender?: string
+          timestamp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
