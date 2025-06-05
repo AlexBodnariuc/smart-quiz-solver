@@ -24,7 +24,7 @@ export const useQuizStorage = () => {
     setError(null);
 
     try {
-      // Create quiz session
+      // Create quiz session without user_id requirement
       const { data: sessionData, error: sessionError } = await supabase
         .from('quiz_sessions')
         .insert({

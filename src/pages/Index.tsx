@@ -2,8 +2,6 @@
 import { useState } from 'react';
 import { QuizLoader } from '@/components/QuizLoader';
 import { Quiz } from '@/components/Quiz';
-import { AuthProvider, useAuth } from '@/components/auth/AuthProvider';
-import { LoginForm } from '@/components/auth/LoginForm';
 
 export interface QuizData {
   id: string;
@@ -20,11 +18,10 @@ export interface Question {
   explanation: string;
 }
 
-const AppContent = () => {
+const Index = () => {
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>(undefined);
   const [isQuizStarted, setIsQuizStarted] = useState(false);
-  const { user, loading } = useAuth();
 
   const handleQuizLoad = (data: QuizData, sessionId?: string) => {
     console.log('Quiz loaded successfully:', data);
@@ -58,18 +55,6 @@ const AppContent = () => {
     setCurrentSessionId(undefined);
     setIsQuizStarted(false);
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
-        <div className="text-white text-xl">Se încarcă...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <LoginForm />;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
@@ -109,14 +94,6 @@ const AppContent = () => {
         <Quiz quizData={quizData} sessionId={currentSessionId} onComplete={handleQuizComplete} />
       )}
     </div>
-  );
-};
-
-const Index = () => {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
   );
 };
 

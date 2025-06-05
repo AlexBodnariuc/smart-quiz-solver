@@ -1,9 +1,8 @@
 
 import { useState, useEffect } from 'react';
-import { Brain, Plus, PlayCircle, Clock, CheckCircle, LogOut } from 'lucide-react';
+import { Brain, Plus, PlayCircle, Clock, CheckCircle } from 'lucide-react';
 import { QuizData } from '@/pages/Index';
 import { parseQuizJSON } from '@/utils/csvParser';
-import { useAuth } from './auth/AuthProvider';
 import { useQuizStorage } from '@/hooks/useQuizStorage';
 
 interface QuizLoaderProps {
@@ -24,16 +23,13 @@ interface QuizSession {
 export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [sessions, setSessions] = useState<QuizSession[]>([]);
-  const { user, signOut } = useAuth();
   const { getUserQuizSessions, loadQuizSession, saveQuizSession, loading: storageLoading } = useQuizStorage();
 
   const quizTitle = "Medmentor, ajutorul tau AI pentru admitere";
 
   useEffect(() => {
-    if (user) {
-      loadUserSessions();
-    }
-  }, [user]);
+    loadUserSessions();
+  }, []);
 
   const loadUserSessions = async () => {
     const userSessions = await getUserQuizSessions();
@@ -138,26 +134,16 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
       <div className="max-w-4xl w-full">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <div></div>
-            <div className="flex items-center justify-center">
-              <div className="bg-gradient-to-r from-cyan-500 to-blue-600 p-4 rounded-2xl">
-                <Brain className="h-12 w-12 text-white" />
-              </div>
+          <div className="flex items-center justify-center mb-6">
+            <div className="bg-gradient-to-r from-cyan-500 to-blue-600 p-4 rounded-2xl">
+              <Brain className="h-12 w-12 text-white" />
             </div>
-            <button
-              onClick={signOut}
-              className="flex items-center gap-2 text-white hover:text-cyan-300 transition-colors"
-            >
-              <LogOut className="h-5 w-5" />
-              Deconectare
-            </button>
           </div>
           <h1 className="text-5xl font-bold text-white mb-4">
             {quizTitle}
           </h1>
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
-            Bun venit, {user?.email}! Accesează quiz-urile tale salvate sau creează unul nou.
+            Bun venit! Accesează quiz-urile salvate sau creează unul nou.
           </p>
         </div>
 
@@ -197,7 +183,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         {/* Quiz Sessions List */}
         {sessions.length > 0 && (
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 mb-6">
-            <h3 className="text-2xl font-bold text-white mb-6">Quiz-urile Tale</h3>
+            <h3 className="text-2xl font-bold text-white mb-6">Quiz-uri Disponibile</h3>
             <div className="space-y-4">
               {sessions.map((session) => (
                 <div
