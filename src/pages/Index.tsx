@@ -23,16 +23,26 @@ const Index = () => {
   const [isQuizStarted, setIsQuizStarted] = useState(false);
 
   const handleQuizLoad = (data: QuizData) => {
+    console.log('Quiz loaded:', data);
     setQuizData(data);
+    setIsQuizStarted(false); // Reset quiz started state
   };
 
   const handleStartQuiz = () => {
+    console.log('Starting quiz:', quizData?.title);
     setIsQuizStarted(true);
   };
 
   const handleQuizComplete = () => {
+    console.log('Quiz completed');
     setIsQuizStarted(false);
+    setQuizData(null); // Reset to allow uploading new quizzes
+  };
+
+  const handleLoadNewQuiz = () => {
+    console.log('Loading new quiz');
     setQuizData(null);
+    setIsQuizStarted(false);
   };
 
   return (
@@ -55,7 +65,7 @@ const Index = () => {
                   Începe Quiz-ul
                 </button>
                 <button
-                  onClick={() => setQuizData(null)}
+                  onClick={handleLoadNewQuiz}
                   className="bg-white/20 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-white/30 transition-all duration-300 border border-white/30"
                 >
                   Încarcă Alt Quiz
