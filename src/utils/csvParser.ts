@@ -1,100 +1,73 @@
 
 import { QuizData, Question } from '@/pages/Index';
 
-export interface QuizJSONData {
+interface JSONQuestionData {
   questionId: string;
   originalQuestion: {
     question: string;
     variants: string[];
-    correctAnswer: null;
+    correctAnswer: number | null;
   };
   agentResponse: {
     answer: string;
     explanation: string;
-    relevantChunks: Array<{
-      text: string;
-      bookTitle: string;
-      relevanceScore: number;
-      page: number;
-    }>;
+    relevantChunks?: any[];
   };
 }
 
-export const parseQuizJSON = (jsonData: QuizJSONData[], quizTitle: string): QuizData => {
-  const questions: Question[] = jsonData.map((item, index) => {
-    // Find which variant matches the agent's answer
-    const correctAnswerIndex = item.originalQuestion.variants.findIndex(variant => {
-      // Clean both strings for comparison - remove A), B), etc. prefixes and extra spaces
-      const cleanVariant = variant.replace(/^[A-D]\)\s*/, '').trim();
-      const cleanAnswer = item.agentResponse.answer.trim();
-      return cleanVariant === cleanAnswer || variant.includes(cleanAnswer);
-    });
+export const parseQuizJSON = (jsonData: JSONQuestionData[], quizTitle: string): QuizData => {
+  console.log('Parsing JSON data:', jsonData);
+  
+  if (!Array.isArray(jsonData)) {
+    throw new Error('JSON data must be an array of questions');
+  }
 
-    // If no exact match found, try to find by letter prefix in the answer
-    let finalCorrectAnswer = correctAnswerIndex;
-    if (correctAnswerIndex === -1) {
-      const answerMatch = item.agentResponse.answer.match(/^([A-D])\)/);
-      if (answerMatch) {
-        const letterIndex = answerMatch[1].charCodeAt(0) - 'A'.charCodeAt(0);
-        if (letterIndex >= 0 && letterIndex < item.originalQuestion.variants.length) {
-          finalCorrectAnswer = letterIndex;
-        }
+  const questions: Question[] = jsonData.map((item, index) => {
+    console.log(`Processing question ${index + 1}:`, item);
+    
+    // Find the correct answer index by matching the agent's answer with the variants
+    let correctAnswerIndex = 0;
+    const agentAnswer = item.agentResponse.answer;
+    const variants = item.originalQuestion.variants;
+    
+    // Try to find exact match first
+    const exactMatch = variants.findIndex(variant => 
+      variant.includes(agentAnswer) || agentAnswer.includes(variant.replace(/^[A-D]\)\s*/, ''))
+    );
+    
+    if (exactMatch !== -1) {
+      correctAnswerIndex = exactMatch;
+    } else {
+      // If no exact match, try to parse the answer as a letter (A, B, C, D)
+      const letterMatch = agentAnswer.match(/^([A-D])/i);
+      if (letterMatch) {
+        correctAnswerIndex = letterMatch[1].toUpperCase().charCodeAt(0) - 65; // A=0, B=1, C=2, D=3
       }
     }
-
-    // Default to 0 if still no match found
-    if (finalCorrectAnswer === -1) {
-      finalCorrectAnswer = 0;
-      console.warn(`Could not determine correct answer for question: ${item.originalQuestion.question}`);
-    }
-
-    // Create passage from relevant chunks if available
-    let passage = '';
-    if (item.agentResponse.relevantChunks && item.agentResponse.relevantChunks.length > 0) {
-      const topChunk = item.agentResponse.relevantChunks[0];
-      passage = `${topChunk.text} (Sursa: ${topChunk.bookTitle}, pagina ${topChunk.page})`;
-    }
-
-    return {
-      id: item.questionId,
+    
+    console.log(`Question ${index + 1} correct answer index:`, correctAnswerIndex);
+    
+    const question: Question = {
+      id: item.questionId || `question-${index}`,
       text: item.originalQuestion.question,
       variants: item.originalQuestion.variants,
-      correctAnswer: finalCorrectAnswer,
+      correctAnswer: correctAnswerIndex,
       explanation: item.agentResponse.explanation,
-      passage: passage || undefined
+      passage: item.agentResponse.relevantChunks ? 
+        JSON.stringify(item.agentResponse.relevantChunks, null, 2) : undefined
     };
+    
+    return question;
   });
 
-  return {
+  console.log('Generated questions:', questions);
+  
+  const quizData: QuizData = {
     id: `quiz-${Date.now()}`,
     title: quizTitle,
-    questions
+    questions: questions
   };
-};
-
-// Legacy exports for backward compatibility (not used anymore)
-export interface CSVQuestionVariants {
-  questionId: string;
-  variants: string[];
-  questionText: string;
-}
-
-export interface JSONQuestionData {
-  id: string;
-  text: string;
-  correctAnswer: number;
-  explanation: string;
-  passage?: string;
-}
-
-export const parseCSV = (csvText: string): CSVQuestionVariants[] => {
-  return [];
-};
-
-export const mergeQuizData = (
-  csvData: CSVQuestionVariants[],
-  jsonData: JSONQuestionData[],
-  quizTitle: string
-) => {
-  throw new Error('CSV functionality has been removed. Please use JSON format only.');
+  
+  console.log('Final quiz data:', quizData);
+  return quizData;
 };
