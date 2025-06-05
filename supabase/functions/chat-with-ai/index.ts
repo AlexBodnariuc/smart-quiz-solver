@@ -29,10 +29,10 @@ serve(async (req) => {
 
     // Create AbortController for timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
 
     try {
-      // Make request to the specific AI model with timeout
+      // Updated request body format for Respell API
       const requestBody = {
         spellId: aiId,
         inputs: {
@@ -42,13 +42,13 @@ serve(async (req) => {
 
       console.log('Request body:', JSON.stringify(requestBody, null, 2));
 
+      // Make request to Respell API with updated headers
       const response = await fetch('https://api.respell.ai/v1/run', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${respellApiKey}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': 'Supabase-Edge-Function/1.0'
+          'Accept': 'application/json'
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
@@ -75,15 +75,32 @@ serve(async (req) => {
         } else if (response.status >= 500) {
           throw new Error('Serviciul Respell nu este disponibil momentan.');
         } else {
-          throw new Error(`Eroare API Respell: ${response.status}`);
+          throw new Error(`Eroare API Respell: ${response.status} - ${errorText}`);
         }
       }
 
       const data = await response.json();
       console.log('Respell API Response:', JSON.stringify(data, null, 2));
 
-      // Extract the response from the AI
-      const aiResponse = data.outputs?.response || data.outputs?.message || data.response || 'Ne pare rău, nu am putut genera un răspuns.';
+      // Extract the response from the AI - check multiple possible response paths
+      let aiResponse = '';
+      
+      if (data.outputs?.response) {
+        aiResponse = data.outputs.response;
+      } else if (data.outputs?.message) {
+        aiResponse = data.outputs.message;
+      } else if (data.response) {
+        aiResponse = data.response;
+      } else if (data.message) {
+        aiResponse = data.message;
+      } else if (data.result) {
+        aiResponse = data.result;
+      } else if (typeof data === 'string') {
+        aiResponse = data;
+      } else {
+        console.log('Unexpected response structure:', data);
+        aiResponse = 'Ne pare rău, nu am putut genera un răspuns în formatul așteptat.';
+      }
 
       console.log('Extracted AI response:', aiResponse);
 
@@ -94,13 +111,25 @@ serve(async (req) => {
     } catch (fetchError) {
       clearTimeout(timeoutId);
       
+      console.error('Fetch error details:', {
+        name: fetchError.name,
+        message: fetchError.message,
+        stack: fetchError.stack
+      });
+      
       if (fetchError.name === 'AbortError') {
         console.error('Request timed out');
         throw new Error('Cererea a expirat. Încercați din nou.');
       }
       
+      // Check for specific network errors
+      if (fetchError.message.includes('error sending request')) {
+        console.error('Network connectivity issue');
+        throw new Error('Probleme de conectivitate la serviciul AI. Verificați conexiunea la internet.');
+      }
+      
       console.error('Network error:', fetchError);
-      throw new Error('Nu s-a putut conecta la serviciul AI. Verificați conexiunea la internet.');
+      throw new Error('Nu s-a putut conecta la serviciul AI. Verificați configurația.');
     }
 
   } catch (error) {
