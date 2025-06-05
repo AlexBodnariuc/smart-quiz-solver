@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Question } from '@/pages/Index';
 import { MessageCircle, Send, X, Bot, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   id: string;
@@ -54,68 +55,28 @@ te rog ajuta-ma sa inteleg mai bine`;
     setIsLoading(true);
 
     try {
-      const requestBody = {
-        spellId: 'resp_6841cc306930819cbee23d3a2efe2ebe0e06ca3050f39bc8',
-        inputs: {
-          message: isInitial ? message : message
+      console.log('Sending message via Supabase edge function');
+
+      const { data, error } = await supabase.functions.invoke('chat-with-ai', {
+        body: {
+          message: isInitial ? message : message,
+          apiKey: apiKey
         }
-      };
-
-      console.log('Making direct API call to Respell with:', requestBody);
-
-      const response = await fetch('https://api.respell.ai/v1/run', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
       });
 
-      console.log('Respell API response status:', response.status);
+      console.log('Supabase edge function response:', { data, error });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Respell API Error:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
-        
-        if (response.status === 401) {
-          throw new Error('Cheie API Respell invalidă. Verificați configurația.');
-        } else if (response.status === 429) {
-          throw new Error('Prea multe cereri. Încercați din nou într-un minut.');
-        } else if (response.status >= 500) {
-          throw new Error('Serviciul Respell nu este disponibil momentan.');
-        } else {
-          throw new Error(`Eroare API Respell: ${response.status} - ${errorText}`);
-        }
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw new Error(error.message || 'Eroare în comunicarea cu serviciul AI');
       }
 
-      const data = await response.json();
-      console.log('Respell API Response:', data);
-
-      // Extract the response from the AI
-      let aiResponse = '';
-      
-      if (data.outputs?.response) {
-        aiResponse = data.outputs.response;
-      } else if (data.outputs?.message) {
-        aiResponse = data.outputs.message;
-      } else if (data.response) {
-        aiResponse = data.response;
-      } else if (data.message) {
-        aiResponse = data.message;
-      } else if (data.result) {
-        aiResponse = data.result;
-      } else if (typeof data === 'string') {
-        aiResponse = data;
-      } else {
-        console.log('Unexpected response structure:', data);
-        aiResponse = 'Ne pare rău, nu am putut genera un răspuns în formatul așteptat.';
+      if (data?.error) {
+        console.error('API error from edge function:', data.error);
+        throw new Error(data.error);
       }
+
+      const aiResponse = data?.response || 'Ne pare rău, nu am primit un răspuns valid de la AI.';
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
