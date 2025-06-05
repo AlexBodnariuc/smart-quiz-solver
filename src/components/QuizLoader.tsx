@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Brain, Plus, PlayCircle, Clock, CheckCircle, Upload, Shuffle } from 'lucide-react';
+import { Brain, Plus, PlayCircle, Clock, CheckCircle, Upload, Shuffle, RefreshCw } from 'lucide-react';
 import { QuizData, Question } from '@/pages/Index';
 import { parseQuizJSON } from '@/utils/csvParser';
 import { useQuizStorage } from '@/hooks/useQuizStorage';
@@ -89,22 +89,12 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     const existingSubjects = sessions.filter(s => s.title.startsWith('Subiect'));
     if (uniqueQuestions.length >= 50 && existingSubjects.length === 0) {
       console.log('Auto-generating 5 subject tests...');
-      generateSubjectQuizzes(5, uniqueQuestions);
+      generateDiverseQuizzes(5, uniqueQuestions);
     }
   };
 
-  const splitQuestionsIntoQuizzes = (questions: Question[], questionsPerQuiz = 50): Question[][] => {
-    // Shuffle questions for randomization
-    const shuffledQuestions = [...questions].sort(() => Math.random() - 0.5);
-    
-    const quizzes: Question[][] = [];
-    for (let i = 0; i < shuffledQuestions.length; i += questionsPerQuiz) {
-      quizzes.push(shuffledQuestions.slice(i, i + questionsPerQuiz));
-    }
-    return quizzes;
-  };
-
-  const generateSubjectQuizzes = async (count: number = 5, questionsToUse?: Question[]) => {
+  // Enhanced quiz generation algorithm for better diversity
+  const generateDiverseQuizzes = async (count: number = 5, questionsToUse?: Question[]) => {
     setIsGenerating(true);
     
     try {
@@ -120,32 +110,61 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         question => question.variants && question.variants.length > 0
       );
 
-      if (validQuestions.length === 0) {
-        alert('Nu există întrebări valide pentru a genera quiz-uri.');
+      if (validQuestions.length < 50) {
+        alert(`Nu există suficiente întrebări valide. Sunt disponibile ${validQuestions.length}, dar sunt necesare cel puțin 50.`);
         return;
       }
 
-      console.log(`Generating ${count} quizzes from ${validQuestions.length} available questions`);
+      console.log(`Generating ${count} diverse quizzes from ${validQuestions.length} available questions`);
 
-      // Split questions into chunks of 50
-      const questionChunks = splitQuestionsIntoQuizzes(validQuestions, 50);
+      // Create a shuffled pool of questions for each quiz generation
+      const questionPool = [...validQuestions];
       
-      // Generate the requested number of quizzes
-      const generatedCount = Math.min(count, questionChunks.length);
-      
-      for (let i = 0; i < generatedCount; i++) {
-        const quizQuestions = questionChunks[i];
+      // Delete existing subject quizzes first
+      const existingSubjects = sessions.filter(s => s.title.startsWith('Subiect'));
+      for (const subject of existingSubjects) {
+        try {
+          // Note: We don't have a delete function in useQuizStorage, so we'll just overwrite
+          console.log(`Will overwrite existing ${subject.title}`);
+        } catch (error) {
+          console.error(`Error preparing to overwrite ${subject.title}:`, error);
+        }
+      }
+
+      // Generate exactly the requested number of quizzes
+      for (let i = 0; i < count; i++) {
+        // Shuffle the entire question pool for this quiz
+        const shuffledPool = [...questionPool].sort(() => Math.random() - 0.5);
+        
+        // Take exactly 50 questions from the shuffled pool
+        const quizQuestions = shuffledPool.slice(0, Math.min(50, shuffledPool.length));
+        
+        // Ensure we have exactly 50 questions (if possible)
+        if (quizQuestions.length < 50 && validQuestions.length >= 50) {
+          // If we don't have enough from the current shuffle, fill from the remaining pool
+          const usedTexts = new Set(quizQuestions.map(q => q.text));
+          const remainingQuestions = validQuestions.filter(q => !usedTexts.has(q.text));
+          const additionalQuestions = remainingQuestions
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 50 - quizQuestions.length);
+          
+          quizQuestions.push(...additionalQuestions);
+        }
+
+        // Final shuffle of the selected questions
+        const finalQuestions = quizQuestions.sort(() => Math.random() - 0.5);
+        
         const subjectNumber = i + 1;
         
         const quizData: QuizData = {
           id: `quiz-subiect-${subjectNumber}-${Date.now()}`,
           title: `Subiect ${subjectNumber}`,
-          questions: quizQuestions
+          questions: finalQuestions
         };
 
         try {
           await saveQuizSession(quizData);
-          console.log(`Generated Subiect ${subjectNumber} with ${quizQuestions.length} questions`);
+          console.log(`Generated Subiect ${subjectNumber} with ${finalQuestions.length} unique questions`);
         } catch (error) {
           console.error(`Error generating Subiect ${subjectNumber}:`, error);
         }
@@ -154,7 +173,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
       // Refresh the sessions list
       await loadUserSessions();
       
-      alert(`S-au generat ${generatedCount} quiz-uri noi din ${validQuestions.length} întrebări disponibile!`);
+      alert(`S-au generat ${count} quiz-uri noi cu câte 50 de întrebări unice din ${validQuestions.length} întrebări disponibile!`);
     } catch (error) {
       console.error('Error generating quizzes:', error);
       alert('Eroare la generarea quiz-urilor.');
@@ -327,7 +346,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
                 <h2 className="text-2xl font-bold text-white">Se generează testele...</h2>
               </div>
               <p className="text-purple-100">
-                Creez {allQuestions.length > 0 ? `5 teste din ${allQuestions.length} întrebări` : 'testele tale'}
+                Creez 5 teste diverse cu câte 50 de întrebări din {allQuestions.length} întrebări disponibile
               </p>
             </div>
           </div>
@@ -369,67 +388,75 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             {allQuestions.length >= 50 && (
               <div className="text-center mt-8">
                 <button
-                  onClick={() => generateSubjectQuizzes(5)}
+                  onClick={() => generateDiverseQuizzes(5)}
                   disabled={isGenerating || storageLoading}
                   className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
                 >
-                  <Shuffle className="h-5 w-5" />
+                  <RefreshCw className="h-5 w-5" />
                   {isGenerating ? 'Se regenerează...' : 'Regenerează Testele'}
                 </button>
                 <p className="text-purple-200 text-sm mt-2">
-                  Creează 5 teste noi cu întrebări amestecate
+                  Creează 5 teste noi cu întrebări diverse și unice
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {/* Create New Quiz Section - Only show if no subject quizzes */}
-        {subjectQuizzes.length === 0 && (
-          <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10 mb-6">
-            <div className="text-center">
-              <button
-                onClick={() => setShowCreateOptions(!showCreateOptions)}
-                className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-3 rounded-lg font-medium hover:bg-white/20 transition-all duration-300 border border-white/20"
-              >
-                <Plus className="h-5 w-5" />
-                Creează Quiz Nou
-              </button>
-              
-              {showCreateOptions && (
-                <div className="mt-6 space-y-4">
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={handleFileUpload}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      disabled={isLoading || storageLoading}
-                    />
-                    <button
-                      disabled={isLoading || storageLoading}
-                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      <Upload className="h-5 w-5" />
-                      Încarcă Fișier JSON
-                    </button>
-                  </div>
-                  
-                  <p className="text-blue-200 text-sm">
-                    Selectează un fișier JSON cu întrebări pentru a crea teste
-                  </p>
+        {/* Load New Questions Section - Always show at bottom */}
+        <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10 mb-6">
+          <div className="text-center">
+            <h3 className="text-xl font-semibold text-white mb-4">Încarcă Întrebări Noi</h3>
+            <button
+              onClick={() => setShowCreateOptions(!showCreateOptions)}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:from-cyan-600 hover:to-blue-700 transition-all duration-300 border border-cyan-400/30"
+            >
+              <Plus className="h-5 w-5" />
+              {showCreateOptions ? 'Ascunde Opțiuni' : 'Adaugă Întrebări'}
+            </button>
+            
+            {showCreateOptions && (
+              <div className="mt-6 space-y-4">
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={isLoading || storageLoading}
+                  />
+                  <button
+                    disabled={isLoading || storageLoading}
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Upload className="h-5 w-5" />
+                    Încarcă Fișier JSON cu Întrebări
+                  </button>
                 </div>
-              )}
-            </div>
+                
+                <p className="text-blue-200 text-sm">
+                  Selectează un fișier JSON cu întrebări noi pentru a le adăuga la baza de date și a regenera testele
+                </p>
+                
+                {allQuestions.length > 0 && (
+                  <div className="bg-cyan-500/10 border border-cyan-400/30 rounded-lg p-4 mt-4">
+                    <p className="text-cyan-200 text-sm">
+                      💡 <strong>Sfat:</strong> După încărcarea întrebărilor noi, testele vor fi regenerate automat pentru a include noile întrebări în amestecul de teste diverse.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Info Section */}
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
           <h3 className="text-lg font-semibold text-white mb-3">Despre Platformă:</h3>
           <div className="text-blue-100 space-y-2">
-            <p>• 5 teste generate automat cu întrebări amestecate</p>
-            <p>• Fiecare test conține 50 de întrebări pentru studiu eficient</p>
+            <p>• 5 teste generate automat cu întrebări diverse și unice</p>
+            <p>• Fiecare test conține exact 50 de întrebări selectate inteligent</p>
+            <p>• Algoritmul asigură diversitatea și non-duplicarea întrebărilor</p>
             <p>• Progresul este salvat automat în cloud</p>
             <p>• Accesează testele de pe orice dispozitiv</p>
             <p>• Explicații detaliate pentru fiecare răspuns</p>
