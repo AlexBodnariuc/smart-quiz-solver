@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { Question } from '@/pages/Index';
 import { MessageCircle, Send, X, Bot, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   id: string;
@@ -22,6 +21,8 @@ export const QuestionChat = ({ question, isOpen, onClose }: QuestionChatProps) =
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(true);
 
   const sendInitialMessage = async () => {
     const initialPrompt = `Întrebarea: ${question.text}
@@ -36,6 +37,10 @@ te rog ajuta-ma sa inteleg mai bine`;
 
   const sendMessage = async (message: string, isInitial = false) => {
     if (!message.trim() && !isInitial) return;
+    if (!apiKey.trim()) {
+      alert('Te rugăm să introduci cheia API Respell mai întâi.');
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -49,25 +54,72 @@ te rog ajuta-ma sa inteleg mai bine`;
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('chat-with-ai', {
-        body: {
-          message: isInitial ? message : message,
-          aiId: 'resp_6841cc306930819cbee23d3a2efe2ebe0e06ca3050f39bc8'
+      const requestBody = {
+        spellId: 'resp_6841cc306930819cbee23d3a2efe2ebe0e06ca3050f39bc8',
+        inputs: {
+          message: isInitial ? message : message
         }
+      };
+
+      console.log('Making direct API call to Respell with:', requestBody);
+
+      const response = await fetch('https://api.respell.ai/v1/run', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
       });
 
-      if (error) {
-        console.error('Supabase function error:', error);
-        throw new Error(error.message || 'Failed to get AI response');
+      console.log('Respell API response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Respell API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        
+        if (response.status === 401) {
+          throw new Error('Cheie API Respell invalidă. Verificați configurația.');
+        } else if (response.status === 429) {
+          throw new Error('Prea multe cereri. Încercați din nou într-un minut.');
+        } else if (response.status >= 500) {
+          throw new Error('Serviciul Respell nu este disponibil momentan.');
+        } else {
+          throw new Error(`Eroare API Respell: ${response.status} - ${errorText}`);
+        }
       }
 
-      if (!data || !data.response) {
-        throw new Error('Invalid response from AI service');
-      }
+      const data = await response.json();
+      console.log('Respell API Response:', data);
+
+      // Extract the response from the AI
+      let aiResponse = '';
       
+      if (data.outputs?.response) {
+        aiResponse = data.outputs.response;
+      } else if (data.outputs?.message) {
+        aiResponse = data.outputs.message;
+      } else if (data.response) {
+        aiResponse = data.response;
+      } else if (data.message) {
+        aiResponse = data.message;
+      } else if (data.result) {
+        aiResponse = data.result;
+      } else if (typeof data === 'string') {
+        aiResponse = data;
+      } else {
+        console.log('Unexpected response structure:', data);
+        aiResponse = 'Ne pare rău, nu am putut genera un răspuns în formatul așteptat.';
+      }
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.response,
+        content: aiResponse,
         sender: 'ai',
         timestamp: new Date()
       };
@@ -77,7 +129,7 @@ te rog ajuta-ma sa inteleg mai bine`;
       console.error('Error sending message:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: 'Ne pare rău, a apărut o eroare. Te rugăm să încerci din nou.',
+        content: error instanceof Error ? error.message : 'Ne pare rău, a apărut o eroare. Te rugăm să încerci din nou.',
         sender: 'ai',
         timestamp: new Date()
       };
@@ -95,6 +147,12 @@ te rog ajuta-ma sa inteleg mai bine`;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  const handleApiKeySubmit = () => {
+    if (apiKey.trim()) {
+      setShowApiKeyInput(false);
     }
   };
 
@@ -124,9 +182,41 @@ te rog ajuta-ma sa inteleg mai bine`;
           </Button>
         </div>
 
+        {/* API Key Input */}
+        {showApiKeyInput && (
+          <div className="p-6 border-b border-white/20">
+            <div className="space-y-4">
+              <div>
+                <label className="text-white font-semibold mb-2 block">
+                  Cheia API Respell
+                </label>
+                <p className="text-blue-100 text-sm mb-3">
+                  Pentru a folosi AI-ul, introdu cheia ta API de la Respell.
+                </p>
+                <div className="flex gap-3">
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="resp_..."
+                    className="flex-1 bg-white/10 border border-white/30 rounded-xl p-3 text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                  <Button
+                    onClick={handleApiKeySubmit}
+                    disabled={!apiKey.trim()}
+                    className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50"
+                  >
+                    Confirmă
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.length === 0 && (
+          {!showApiKeyInput && messages.length === 0 && (
             <div className="text-center py-8">
               <Bot className="h-12 w-12 text-cyan-300 mx-auto mb-4" />
               <p className="text-blue-100 mb-4">
@@ -194,7 +284,7 @@ te rog ajuta-ma sa inteleg mai bine`;
         </div>
 
         {/* Input */}
-        {messages.length > 0 && (
+        {!showApiKeyInput && messages.length > 0 && (
           <div className="p-6 border-t border-white/20">
             <div className="flex gap-3">
               <textarea
