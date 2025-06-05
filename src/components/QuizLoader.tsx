@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Upload, FileText, Brain, Plus } from 'lucide-react';
 import { QuizData } from '@/pages/Index';
-import { parseCSV, mergeQuizData, CSVQuestionVariants, JSONQuestionData } from '@/utils/csvParser';
+import { parseQuizJSON } from '@/utils/csvParser';
 
 interface QuizLoaderProps {
   onQuizLoad: (data: QuizData) => void;
@@ -12,41 +12,39 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [csvData, setCsvData] = useState<CSVQuestionVariants[] | null>(null);
-  const [jsonData, setJsonData] = useState<JSONQuestionData[] | null>(null);
+  const [jsonData, setJsonData] = useState<any[] | null>(null);
   const [quizTitle, setQuizTitle] = useState('');
 
-  const handleFileUpload = async (file: File, fileType: 'csv' | 'json') => {
+  const handleFileUpload = async (file: File) => {
     setIsLoading(true);
     setError(null);
 
     try {
       const text = await file.text();
+      const parsedJSON = JSON.parse(text);
       
-      if (fileType === 'csv') {
-        const parsedCSV = parseCSV(text);
-        if (parsedCSV.length === 0) {
-          throw new Error('Fișierul CSV nu conține date valide. Asigură-te că are cel puțin o întrebare cu 4 opțiuni.');
-        }
-        setCsvData(parsedCSV);
-      } else {
-        const parsedJSON = JSON.parse(text) as JSONQuestionData[];
-        
-        // Validate JSON structure
-        if (!Array.isArray(parsedJSON)) {
-          throw new Error('JSON-ul trebuie să conțină un array de întrebări.');
-        }
-        
-        parsedJSON.forEach((item, index) => {
-          if (!item.id || !item.text || typeof item.correctAnswer !== 'number' || !item.explanation) {
-            throw new Error(`Întrebarea ${index + 1} nu are structura corectă (lipsesc: id, text, correctAnswer sau explanation).`);
-          }
-        });
-        
-        setJsonData(parsedJSON);
+      // Validate JSON structure
+      if (!Array.isArray(parsedJSON)) {
+        throw new Error('JSON-ul trebuie să conțină un array de întrebări.');
       }
+      
+      parsedJSON.forEach((item, index) => {
+        if (!item.questionId || !item.originalQuestion || !item.agentResponse) {
+          throw new Error(`Întrebarea ${index + 1} nu are structura corectă (lipsesc: questionId, originalQuestion sau agentResponse).`);
+        }
+        
+        if (!item.originalQuestion.question || !Array.isArray(item.originalQuestion.variants)) {
+          throw new Error(`Întrebarea ${index + 1} nu are întrebarea sau variantele definite corect.`);
+        }
+        
+        if (!item.agentResponse.answer || !item.agentResponse.explanation) {
+          throw new Error(`Întrebarea ${index + 1} nu are răspunsul sau explicația definite în agentResponse.`);
+        }
+      });
+      
+      setJsonData(parsedJSON);
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Eroare la încărcarea fișierului ${fileType.toUpperCase()}`);
+      setError(err instanceof Error ? err.message : 'Eroare la încărcarea fișierului JSON');
     } finally {
       setIsLoading(false);
     }
@@ -58,34 +56,32 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     
     const file = e.dataTransfer.files[0];
     if (file) {
-      if (file.name.endsWith('.csv')) {
-        handleFileUpload(file, 'csv');
-      } else if (file.name.endsWith('.json')) {
-        handleFileUpload(file, 'json');
+      if (file.name.endsWith('.json')) {
+        handleFileUpload(file);
       } else {
-        setError('Te rog să încarci fișiere CSV sau JSON valide.');
+        setError('Te rog să încarci un fișier JSON valid.');
       }
     }
   };
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>, fileType: 'csv' | 'json') => {
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleFileUpload(file, fileType);
+      handleFileUpload(file);
     }
   };
 
   const createQuiz = () => {
-    if (!csvData || !jsonData || !quizTitle.trim()) {
-      setError('Te rog să încarci ambele fișiere și să introduci titlul quiz-ului.');
+    if (!jsonData || !quizTitle.trim()) {
+      setError('Te rog să încarci fișierul JSON și să introduci titlul quiz-ului.');
       return;
     }
 
     try {
-      const mergedData = mergeQuizData(csvData, jsonData, quizTitle.trim());
-      onQuizLoad(mergedData);
+      const quizData = parseQuizJSON(jsonData, quizTitle.trim());
+      onQuizLoad(quizData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Eroare la combinarea datelor.');
+      setError(err instanceof Error ? err.message : 'Eroare la procesarea datelor.');
     }
   };
 
@@ -138,7 +134,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent"> Quiz</span>
           </h1>
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
-            Încarcă fișierul CSV cu variante și JSON cu întrebările tale pentru a crea quiz-ul
+            Încarcă fișierul JSON cu întrebările tale pentru a crea quiz-ul
           </p>
         </div>
 
@@ -154,60 +150,11 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           />
         </div>
 
-        {/* Upload Areas */}
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
-          {/* CSV Upload */}
+        {/* JSON Upload */}
+        <div className="mb-6">
           <div
             className={`
-              relative border-2 border-dashed rounded-3xl p-6 text-center transition-all duration-300
-              ${isDragOver 
-                ? 'border-cyan-400 bg-cyan-500/20' 
-                : 'border-white/30 bg-white/10 hover:bg-white/20'
-              }
-              backdrop-blur-lg
-            `}
-            onDrop={handleDrop}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragOver(true);
-            }}
-            onDragLeave={() => setIsDragOver(false)}
-          >
-            <input
-              type="file"
-              accept=".csv"
-              onChange={(e) => handleFileInput(e, 'csv')}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              disabled={isLoading}
-            />
-            
-            <div className="flex flex-col items-center">
-              <div className="bg-gradient-to-r from-orange-500 to-red-600 p-3 rounded-xl mb-3">
-                <Upload className="h-6 w-6 text-white" />
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-2">
-                Încarcă CSV cu Variante
-              </h3>
-              <p className="text-blue-100 text-sm mb-2">
-                {csvData ? '✓ CSV încărcat' : 'Drag & drop sau click'}
-              </p>
-              {csvData && (
-                <div className="text-center">
-                  <p className="text-green-300 text-xs">
-                    {csvData.length} întrebări găsite
-                  </p>
-                  <p className="text-blue-200 text-xs mt-1">
-                    Prima întrebare: "{csvData[0]?.questionText?.substring(0, 50)}..."
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* JSON Upload */}
-          <div
-            className={`
-              relative border-2 border-dashed rounded-3xl p-6 text-center transition-all duration-300
+              relative border-2 border-dashed rounded-3xl p-8 text-center transition-all duration-300
               ${isDragOver 
                 ? 'border-cyan-400 bg-cyan-500/20' 
                 : 'border-white/30 bg-white/10 hover:bg-white/20'
@@ -224,32 +171,37 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             <input
               type="file"
               accept=".json"
-              onChange={(e) => handleFileInput(e, 'json')}
+              onChange={handleFileInput}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               disabled={isLoading}
             />
             
             <div className="flex flex-col items-center">
-              <div className="bg-gradient-to-r from-cyan-500 to-blue-600 p-3 rounded-xl mb-3">
-                <FileText className="h-6 w-6 text-white" />
+              <div className="bg-gradient-to-r from-cyan-500 to-blue-600 p-4 rounded-xl mb-4">
+                <FileText className="h-8 w-8 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">
-                Încarcă JSON cu Date
+              <h3 className="text-2xl font-semibold text-white mb-3">
+                Încarcă Fișierul JSON cu Quiz
               </h3>
-              <p className="text-blue-100 text-sm mb-2">
-                {jsonData ? '✓ JSON încărcat' : 'Drag & drop sau click'}
+              <p className="text-blue-100 text-lg mb-3">
+                {jsonData ? '✓ JSON încărcat cu succes' : 'Drag & drop sau click pentru a selecta'}
               </p>
               {jsonData && (
-                <p className="text-green-300 text-xs">
-                  {jsonData.length} întrebări găsite
-                </p>
+                <div className="text-center">
+                  <p className="text-green-300 text-sm font-semibold">
+                    {jsonData.length} întrebări găsite
+                  </p>
+                  <p className="text-blue-200 text-sm mt-1">
+                    Prima întrebare: "{jsonData[0]?.originalQuestion?.question?.substring(0, 50)}..."
+                  </p>
+                </div>
               )}
             </div>
           </div>
         </div>
 
         {/* Create Quiz Button */}
-        {csvData && jsonData && quizTitle.trim() && (
+        {jsonData && quizTitle.trim() && (
           <div className="text-center mb-6">
             <button
               onClick={createQuiz}
@@ -298,30 +250,30 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         )}
 
         {/* Format Info */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-3">Format CSV (ca în screenshot):</h3>
-            <pre className="text-sm text-blue-100 bg-black/30 p-4 rounded-lg overflow-x-auto">
-{`Question,Option A,Option B,Option C,Option D
-Care este formula moleculară?,A) C₆H₁₂O₆,B) C₆H₁₀O₅,C) C₆H₁₄O₆,D) C₆H₈O₆
-Care este pH-ul?,A) 0,B) 7,C) 14,D) 1`}
-            </pre>
-          </div>
-
-          <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-3">Format JSON (Date):</h3>
-            <pre className="text-sm text-blue-100 bg-black/30 p-4 rounded-lg overflow-x-auto">
+        <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
+          <h3 className="text-lg font-semibold text-white mb-3">Format JSON Așteptat:</h3>
+          <pre className="text-sm text-blue-100 bg-black/30 p-4 rounded-lg overflow-x-auto">
 {`[
   {
-    "id": "q1",
-    "text": "Întrebarea aici?",
-    "correctAnswer": 0,
-    "explanation": "Explicația...",
-    "passage": "Pasaj opțional..."
+    "questionId": "quiz-1749110512525-0",
+    "originalQuestion": {
+      "question": "Care dintre următoarele reprezintă formula moleculară a glucozei?",
+      "variants": [
+        "A) C₆H₁₂O₆",
+        "B) C₆H₁₀O₅",
+        "C) C₅H₁₀O₅",
+        "D) C₆H₆O₆"
+      ],
+      "correctAnswer": null
+    },
+    "agentResponse": {
+      "answer": "C₆H₁₂O₆",
+      "explanation": "Formula moleculară a glucozei este C₆H₁₂O₆...",
+      "relevantChunks": [...]
+    }
   }
 ]`}
-            </pre>
-          </div>
+          </pre>
         </div>
       </div>
     </div>
