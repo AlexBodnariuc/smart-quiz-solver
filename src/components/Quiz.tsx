@@ -1,13 +1,15 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { QuizData, Question } from '@/pages/Index';
 import { QuestionCard } from './QuestionCard';
 import { QuizResults } from './QuizResults';
 import { ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
 import { ProcessedChunk } from '@/utils/csvParser';
+import { useQuizStorage } from '@/hooks/useQuizStorage';
 
 interface QuizProps {
   quizData: QuizData;
+  sessionId?: string;
   onComplete: () => void;
 }
 
@@ -17,15 +19,25 @@ export interface Answer {
   isCorrect: boolean;
 }
 
-export const Quiz = ({ quizData, onComplete }: QuizProps) => {
+export const Quiz = ({ quizData, sessionId, onComplete }: QuizProps) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [showPassage, setShowPassage] = useState(false);
+  const { saveQuizProgress, completeQuizSession } = useQuizStorage();
 
   const currentQuestion = quizData.questions[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === quizData.questions.length - 1;
   const hasAnswered = answers.some(a => a.questionId === currentQuestion.id);
+
+  // Auto-save progress when answers change
+  useEffect(() => {
+    if (sessionId && answers.length > 0) {
+      saveQuizProgress(sessionId, currentQuestionIndex, answers).catch((error) => {
+        console.error('Error saving progress:', error);
+      });
+    }
+  }, [answers, currentQuestionIndex, sessionId]);
 
   const handleAnswer = (selectedAnswer: number) => {
     const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
@@ -41,8 +53,19 @@ export const Quiz = ({ quizData, onComplete }: QuizProps) => {
     });
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (isLastQuestion) {
+      // Complete the quiz
+      if (sessionId) {
+        const correctAnswers = answers.filter(a => a.isCorrect).length;
+        const score = (correctAnswers / quizData.questions.length) * 100;
+        
+        try {
+          await completeQuizSession(sessionId, answers, score);
+        } catch (error) {
+          console.error('Error completing quiz session:', error);
+        }
+      }
       setShowResults(true);
     } else {
       setCurrentQuestionIndex(prev => prev + 1);
@@ -104,6 +127,11 @@ export const Quiz = ({ quizData, onComplete }: QuizProps) => {
             <h1 className="text-2xl font-bold text-white">{quizData.title}</h1>
             <div className="text-blue-100">
               Întrebarea {currentQuestionIndex + 1} din {quizData.questions.length}
+              {sessionId && (
+                <div className="text-xs text-cyan-300 mt-1">
+                  ☁️ Progresul este salvat automat
+                </div>
+              )}
             </div>
           </div>
           

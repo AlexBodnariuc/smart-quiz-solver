@@ -66,6 +66,41 @@ export type Database = {
         }
         Relationships: []
       }
+      quiz_answers: {
+        Row: {
+          answered_at: string
+          id: string
+          is_correct: boolean
+          question_id: string
+          quiz_session_id: string
+          selected_answer: number
+        }
+        Insert: {
+          answered_at?: string
+          id?: string
+          is_correct: boolean
+          question_id: string
+          quiz_session_id: string
+          selected_answer: number
+        }
+        Update: {
+          answered_at?: string
+          id?: string
+          is_correct?: boolean
+          question_id?: string
+          quiz_session_id?: string
+          selected_answer?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_answers_quiz_session_id_fkey"
+            columns: ["quiz_session_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quiz_questions: {
         Row: {
           created_at: string
@@ -97,6 +132,89 @@ export type Database = {
           pdf_filename?: string | null
           question?: string
           subject?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      quiz_session_questions: {
+        Row: {
+          correct_answer: number
+          created_at: string
+          explanation: string | null
+          id: string
+          passage: Json | null
+          question_id: string
+          question_order: number
+          question_text: string
+          quiz_session_id: string
+          variants: Json
+        }
+        Insert: {
+          correct_answer: number
+          created_at?: string
+          explanation?: string | null
+          id?: string
+          passage?: Json | null
+          question_id: string
+          question_order: number
+          question_text: string
+          quiz_session_id: string
+          variants: Json
+        }
+        Update: {
+          correct_answer?: number
+          created_at?: string
+          explanation?: string | null
+          id?: string
+          passage?: Json | null
+          question_id?: string
+          question_order?: number
+          question_text?: string
+          quiz_session_id?: string
+          variants?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_session_questions_quiz_session_id_fkey"
+            columns: ["quiz_session_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_sessions: {
+        Row: {
+          created_at: string
+          current_question_index: number
+          id: string
+          is_completed: boolean
+          score: number | null
+          title: string
+          total_questions: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_question_index?: number
+          id?: string
+          is_completed?: boolean
+          score?: number | null
+          title: string
+          total_questions?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_question_index?: number
+          id?: string
+          is_completed?: boolean
+          score?: number | null
+          title?: string
+          total_questions?: number
           updated_at?: string
           user_id?: string
         }

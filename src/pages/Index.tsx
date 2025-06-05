@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { QuizLoader } from '@/components/QuizLoader';
 import { Quiz } from '@/components/Quiz';
+import { AuthProvider, useAuth } from '@/components/auth/AuthProvider';
+import { LoginForm } from '@/components/auth/LoginForm';
 
 export interface QuizData {
   id: string;
@@ -18,20 +20,24 @@ export interface Question {
   explanation: string;
 }
 
-const Index = () => {
+const AppContent = () => {
   const [quizData, setQuizData] = useState<QuizData | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | undefined>(undefined);
   const [isQuizStarted, setIsQuizStarted] = useState(false);
+  const { user, loading } = useAuth();
 
-  const handleQuizLoad = (data: QuizData) => {
+  const handleQuizLoad = (data: QuizData, sessionId?: string) => {
     console.log('Quiz loaded successfully:', data);
+    console.log('Session ID:', sessionId);
     console.log('Number of questions:', data.questions.length);
     setQuizData(data);
-    setIsQuizStarted(false); // Reset quiz started state
+    setCurrentSessionId(sessionId);
+    setIsQuizStarted(false);
   };
 
   const handleStartQuiz = () => {
     console.log('Starting quiz:', quizData?.title);
-    console.log('Quiz data before starting:', quizData);
+    console.log('Session ID:', currentSessionId);
     if (!quizData) {
       console.error('No quiz data available to start');
       return;
@@ -42,16 +48,28 @@ const Index = () => {
   const handleQuizComplete = () => {
     console.log('Quiz completed');
     setIsQuizStarted(false);
-    setQuizData(null); // Reset to allow uploading new quizzes
+    setQuizData(null);
+    setCurrentSessionId(undefined);
   };
 
   const handleLoadNewQuiz = () => {
     console.log('Loading new quiz');
     setQuizData(null);
+    setCurrentSessionId(undefined);
     setIsQuizStarted(false);
   };
 
-  console.log('Current state - quizData:', !!quizData, 'isQuizStarted:', isQuizStarted);
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+        <div className="text-white text-xl">Se încarcă...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginForm />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
@@ -65,6 +83,11 @@ const Index = () => {
               <p className="text-blue-100 text-lg mb-8">
                 Pregătește-te să îți testezi cunoștințele cu {quizData.questions.length} întrebări
               </p>
+              {currentSessionId && (
+                <p className="text-cyan-300 text-sm mb-6">
+                  ☁️ Quiz salvat în cloud - progresul va fi sincronizat
+                </p>
+              )}
               <div className="flex gap-4 justify-center">
                 <button
                   onClick={handleStartQuiz}
@@ -79,18 +102,21 @@ const Index = () => {
                   Încarcă Alt Quiz
                 </button>
               </div>
-              
-              {/* Debug info */}
-              <div className="mt-6 text-sm text-blue-200 opacity-70">
-                Debug: Quiz loaded with {quizData.questions.length} questions
-              </div>
             </div>
           </div>
         </div>
       ) : (
-        <Quiz quizData={quizData} onComplete={handleQuizComplete} />
+        <Quiz quizData={quizData} sessionId={currentSessionId} onComplete={handleQuizComplete} />
       )}
     </div>
+  );
+};
+
+const Index = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 
