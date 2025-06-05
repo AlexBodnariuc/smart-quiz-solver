@@ -32,7 +32,7 @@ export const PassageDisplay = ({ chunks }: PassageDisplayProps) => {
   return (
     <div className="mt-6 border-t border-white/20 pt-6">
       <h4 className="text-cyan-300 font-semibold mb-4">
-        Cele mai relevante trei fragmente:
+        Revizuiește cunoștințele
       </h4>
       <div className="space-y-4">
         {topChunks.map((chunk, index) => (
@@ -44,13 +44,23 @@ export const PassageDisplay = ({ chunks }: PassageDisplayProps) => {
               "{chunk.text}"
             </blockquote>
             <div className="text-sm text-gray-300">
-              ({chunk.source || 'Unknown source'}
-              {chunk.page && `, Page ${chunk.page}`})
-              {chunk.score && (
-                <span className="ml-2 text-xs opacity-70">
-                  (Relevance: {(chunk.score * 100).toFixed(0)}%)
-                </span>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {chunk.source && (
+                  <span className="font-medium">
+                    {chunk.source}
+                  </span>
+                )}
+                {chunk.page && (
+                  <span>
+                    - Pagina {chunk.page}
+                  </span>
+                )}
+                {chunk.score && (
+                  <span className="ml-auto text-xs opacity-70">
+                    Relevanță: {(chunk.score * 100).toFixed(0)}%
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         ))}
