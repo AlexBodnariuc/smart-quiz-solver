@@ -1,5 +1,5 @@
-
-import { QuizData, Answer } from '@/pages/Index';
+import { QuizData } from '@/pages/Index';
+import { Answer } from './Quiz';
 import { Trophy, RotateCcw, CheckCircle, XCircle, Target } from 'lucide-react';
 
 interface QuizResultsProps {
