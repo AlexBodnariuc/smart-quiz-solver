@@ -25,6 +25,9 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
       
       if (fileType === 'csv') {
         const parsedCSV = parseCSV(text);
+        if (parsedCSV.length === 0) {
+          throw new Error('Fișierul CSV nu conține date valide. Asigură-te că are cel puțin o întrebare cu 4 opțiuni.');
+        }
         setCsvData(parsedCSV);
       } else {
         const parsedJSON = JSON.parse(text) as JSONQuestionData[];
@@ -189,9 +192,14 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
                 {csvData ? '✓ CSV încărcat' : 'Drag & drop sau click'}
               </p>
               {csvData && (
-                <p className="text-green-300 text-xs">
-                  {csvData.length} întrebări găsite
-                </p>
+                <div className="text-center">
+                  <p className="text-green-300 text-xs">
+                    {csvData.length} întrebări găsite
+                  </p>
+                  <p className="text-blue-200 text-xs mt-1">
+                    Prima întrebare: "{csvData[0]?.questionText?.substring(0, 50)}..."
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -292,11 +300,11 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         {/* Format Info */}
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-3">Format CSV (Variante):</h3>
+            <h3 className="text-lg font-semibold text-white mb-3">Format CSV (ca în screenshot):</h3>
             <pre className="text-sm text-blue-100 bg-black/30 p-4 rounded-lg overflow-x-auto">
-{`questionId,variant1,variant2,variant3,variant4
-q1,Opțiunea A,Opțiunea B,Opțiunea C,Opțiunea D
-q2,Răspuns 1,Răspuns 2,Răspuns 3,Răspuns 4`}
+{`Question,Option A,Option B,Option C,Option D
+Care este formula moleculară?,A) C₆H₁₂O₆,B) C₆H₁₀O₅,C) C₆H₁₄O₆,D) C₆H₈O₆
+Care este pH-ul?,A) 0,B) 7,C) 14,D) 1`}
             </pre>
           </div>
 
