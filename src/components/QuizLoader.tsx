@@ -25,6 +25,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   const [sessions, setSessions] = useState<QuizSession[]>([]);
   const [showCreateOptions, setShowCreateOptions] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [allQuestions, setAllQuestions] = useState<Question[]>([]);
   const { getUserQuizSessions, loadQuizSession, saveQuizSession, loading: storageLoading } = useQuizStorage();
 
   const quizTitle = "Medmentor, ajutorul tau AI pentru admitere";
@@ -33,35 +34,89 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     loadUserSessions();
   }, []);
 
+  useEffect(() => {
+    if (sessions.length > 0) {
+      loadAllQuestions();
+    }
+  }, [sessions]);
+
   const loadUserSessions = async () => {
     const userSessions = await getUserQuizSessions();
     setSessions(userSessions);
   };
 
+  const loadAllQuestions = async () => {
+    console.log('Loading all questions from all sessions...');
+    const questionsFromSessions: Question[] = [];
+    
+    // Load questions from all non-Subiect sessions (to avoid loading generated tests)
+    for (const session of sessions) {
+      if (!session.title.startsWith('Subiect')) {
+        try {
+          const quizData = await loadQuizSession(session.id);
+          if (quizData && quizData.questions) {
+            questionsFromSessions.push(...quizData.questions);
+            console.log(`Loaded ${quizData.questions.length} questions from ${session.title}`);
+          }
+        } catch (error) {
+          console.error(`Error loading questions from session ${session.id}:`, error);
+        }
+      }
+    }
+
+    // Also try to load from localStorage as fallback
+    const storedQuestions = localStorage.getItem('quizQuestions');
+    if (storedQuestions) {
+      try {
+        const questionData = JSON.parse(storedQuestions);
+        const quizData = parseQuizJSON(questionData, quizTitle);
+        questionsFromSessions.push(...quizData.questions);
+        console.log(`Loaded ${quizData.questions.length} questions from localStorage`);
+      } catch (error) {
+        console.error('Error loading questions from localStorage:', error);
+      }
+    }
+
+    // Remove duplicates based on question text
+    const uniqueQuestions = questionsFromSessions.filter((question, index, self) => 
+      index === self.findIndex(q => q.text === question.text)
+    );
+
+    console.log(`Total unique questions available: ${uniqueQuestions.length}`);
+    setAllQuestions(uniqueQuestions);
+
+    // Auto-generate 5 tests if we have questions and no Subiect tests exist
+    const existingSubjects = sessions.filter(s => s.title.startsWith('Subiect'));
+    if (uniqueQuestions.length >= 50 && existingSubjects.length === 0) {
+      console.log('Auto-generating 5 subject tests...');
+      generateSubjectQuizzes(5, uniqueQuestions);
+    }
+  };
+
   const splitQuestionsIntoQuizzes = (questions: Question[], questionsPerQuiz = 50): Question[][] => {
+    // Shuffle questions for randomization
+    const shuffledQuestions = [...questions].sort(() => Math.random() - 0.5);
+    
     const quizzes: Question[][] = [];
-    for (let i = 0; i < questions.length; i += questionsPerQuiz) {
-      quizzes.push(questions.slice(i, i + questionsPerQuiz));
+    for (let i = 0; i < shuffledQuestions.length; i += questionsPerQuiz) {
+      quizzes.push(shuffledQuestions.slice(i, i + questionsPerQuiz));
     }
     return quizzes;
   };
 
-  const generateSubjectQuizzes = async (count: number = 3) => {
+  const generateSubjectQuizzes = async (count: number = 5, questionsToUse?: Question[]) => {
     setIsGenerating(true);
     
     try {
-      const storedQuestions = localStorage.getItem('quizQuestions');
+      const questionsSource = questionsToUse || allQuestions;
       
-      if (!storedQuestions) {
-        alert('Nu există întrebări stocate pentru a genera quiz-uri.');
+      if (questionsSource.length === 0) {
+        alert('Nu există întrebări disponibile pentru a genera quiz-uri.');
         return;
       }
 
-      const questionData = JSON.parse(storedQuestions);
-      const allQuestions = parseQuizJSON(questionData, quizTitle).questions;
-      
       // Filter out questions with no variants
-      const validQuestions = allQuestions.filter(
+      const validQuestions = questionsSource.filter(
         question => question.variants && question.variants.length > 0
       );
 
@@ -70,13 +125,17 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         return;
       }
 
+      console.log(`Generating ${count} quizzes from ${validQuestions.length} available questions`);
+
       // Split questions into chunks of 50
       const questionChunks = splitQuestionsIntoQuizzes(validQuestions, 50);
       
       // Generate the requested number of quizzes
-      for (let i = 0; i < Math.min(count, questionChunks.length); i++) {
+      const generatedCount = Math.min(count, questionChunks.length);
+      
+      for (let i = 0; i < generatedCount; i++) {
         const quizQuestions = questionChunks[i];
-        const subjectNumber = sessions.filter(s => s.title.startsWith('Subiect')).length + 1 + i;
+        const subjectNumber = i + 1;
         
         const quizData: QuizData = {
           id: `quiz-subiect-${subjectNumber}-${Date.now()}`,
@@ -95,7 +154,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
       // Refresh the sessions list
       await loadUserSessions();
       
-      alert(`S-au generat ${Math.min(count, questionChunks.length)} quiz-uri noi!`);
+      alert(`S-au generat ${generatedCount} quiz-uri noi din ${validQuestions.length} întrebări disponibile!`);
     } catch (error) {
       console.error('Error generating quizzes:', error);
       alert('Eroare la generarea quiz-urilor.');
@@ -203,11 +262,6 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     }
   };
 
-  const hasStoredQuestions = () => {
-    const stored = localStorage.getItem('quizQuestions');
-    return stored && JSON.parse(stored).length > 0;
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('ro-RO', {
       year: 'numeric',
@@ -238,6 +292,9 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     return 'Nou';
   };
 
+  // Filter to show only generated subject quizzes
+  const subjectQuizzes = sessions.filter(session => session.title.startsWith('Subiect'));
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="max-w-4xl w-full">
@@ -252,141 +309,129 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             {quizTitle}
           </h1>
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
-            Bun venit! Accesează quiz-urile salvate sau creează unele noi.
+            Bun venit! Alege un test pentru a începe studiul.
           </p>
+          {allQuestions.length > 0 && (
+            <p className="text-cyan-300 mt-4">
+              📚 {allQuestions.length} întrebări disponibile în total
+            </p>
+          )}
         </div>
 
-        {/* Generate Subject Quizzes Button - Prominent placement */}
-        {hasStoredQuestions() && (
+        {/* Loading State */}
+        {isGenerating && (
           <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-lg rounded-2xl p-6 border border-purple-400/30 mb-8">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-white mb-4">Generează Quiz-uri pe Subiecte</h2>
-              <p className="text-purple-100 mb-6">
-                Împarte întrebările în quiz-uri de câte 50 de întrebări pentru studiu focalizat
-              </p>
-              <div className="flex gap-4 justify-center">
-                <button
-                  onClick={() => generateSubjectQuizzes(3)}
-                  disabled={isGenerating || storageLoading}
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
-                >
-                  <Shuffle className="h-5 w-5" />
-                  {isGenerating ? 'Se generează...' : 'Generează 3 Quiz-uri'}
-                </button>
-                <button
-                  onClick={() => generateSubjectQuizzes(5)}
-                  disabled={isGenerating || storageLoading}
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-indigo-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
-                >
-                  <Shuffle className="h-5 w-5" />
-                  {isGenerating ? 'Se generează...' : 'Generează 5 Quiz-uri'}
-                </button>
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                <h2 className="text-2xl font-bold text-white">Se generează testele...</h2>
               </div>
+              <p className="text-purple-100">
+                Creez {allQuestions.length > 0 ? `5 teste din ${allQuestions.length} întrebări` : 'testele tale'}
+              </p>
             </div>
           </div>
         )}
 
-        {/* Quiz Sessions List */}
-        {sessions.length > 0 && (
+        {/* Generated Subject Quizzes */}
+        {subjectQuizzes.length > 0 && (
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-8">
-            <h2 className="text-3xl font-bold text-white mb-8 text-center">Quiz-uri Disponibile</h2>
-            <div className="space-y-4">
-              {sessions.map((session) => (
+            <h2 className="text-3xl font-bold text-white mb-8 text-center">Teste Generate</h2>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {subjectQuizzes.map((session) => (
                 <div
                   key={session.id}
-                  className="bg-white/10 border border-white/20 rounded-xl p-6 hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-[1.02]"
+                  className="bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-400/30 rounded-xl p-6 hover:bg-purple-500/30 transition-all duration-300 cursor-pointer transform hover:scale-[1.02]"
                   onClick={() => handleLoadSession(session)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                  <div className="text-center">
+                    <div className="flex justify-center mb-4">
                       {getSessionIcon(session)}
-                      <div>
-                        <h4 className="text-white font-semibold text-lg">{session.title}</h4>
-                        <p className="text-blue-200 text-sm">
-                          {getSessionStatus(session)} • {formatDate(session.created_at)}
-                        </p>
-                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-cyan-300 font-medium">
-                        {session.total_questions} întrebări
+                    <h4 className="text-white font-bold text-xl mb-2">{session.title}</h4>
+                    <p className="text-purple-200 text-lg font-medium mb-2">
+                      {session.total_questions} întrebări
+                    </p>
+                    <p className="text-blue-200 text-sm">
+                      {getSessionStatus(session)}
+                    </p>
+                    {session.is_completed && session.score && (
+                      <p className="text-green-300 text-sm mt-2">
+                        Scor: {Math.round(session.score)}%
                       </p>
-                      {session.is_completed && session.score && (
-                        <p className="text-green-300 text-sm">
-                          Scor: {Math.round(session.score)}%
-                        </p>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Create New Quiz Section */}
-        <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10 mb-6">
-          <div className="text-center">
-            <button
-              onClick={() => setShowCreateOptions(!showCreateOptions)}
-              className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-3 rounded-lg font-medium hover:bg-white/20 transition-all duration-300 border border-white/20"
-            >
-              <Plus className="h-5 w-5" />
-              Creează Quiz Nou
-            </button>
             
-            {showCreateOptions && (
-              <div className="mt-6 space-y-4">
-                {hasStoredQuestions() && (
-                  <button
-                    onClick={handleCreateFromStorage}
-                    disabled={isLoading || storageLoading}
-                    className="block w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-lg font-medium hover:from-green-600 hover:to-emerald-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading || storageLoading ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        Se creează quiz-ul...
-                      </div>
-                    ) : (
-                      'Folosește Quiz-ul Implicit'
-                    )}
-                  </button>
-                )}
-                
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleFileUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    disabled={isLoading || storageLoading}
-                  />
-                  <button
-                    disabled={isLoading || storageLoading}
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    <Upload className="h-5 w-5" />
-                    Încarcă Fișier JSON
-                  </button>
-                </div>
-                
-                <p className="text-blue-200 text-sm">
-                  Selectează un fișier JSON cu întrebări pentru a crea un quiz personalizat
+            {/* Regenerate Button */}
+            {allQuestions.length >= 50 && (
+              <div className="text-center mt-8">
+                <button
+                  onClick={() => generateSubjectQuizzes(5)}
+                  disabled={isGenerating || storageLoading}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                >
+                  <Shuffle className="h-5 w-5" />
+                  {isGenerating ? 'Se regenerează...' : 'Regenerează Testele'}
+                </button>
+                <p className="text-purple-200 text-sm mt-2">
+                  Creează 5 teste noi cu întrebări amestecate
                 </p>
               </div>
             )}
           </div>
-        </div>
+        )}
+
+        {/* Create New Quiz Section - Only show if no subject quizzes */}
+        {subjectQuizzes.length === 0 && (
+          <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10 mb-6">
+            <div className="text-center">
+              <button
+                onClick={() => setShowCreateOptions(!showCreateOptions)}
+                className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-3 rounded-lg font-medium hover:bg-white/20 transition-all duration-300 border border-white/20"
+              >
+                <Plus className="h-5 w-5" />
+                Creează Quiz Nou
+              </button>
+              
+              {showCreateOptions && (
+                <div className="mt-6 space-y-4">
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleFileUpload}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={isLoading || storageLoading}
+                    />
+                    <button
+                      disabled={isLoading || storageLoading}
+                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Upload className="h-5 w-5" />
+                      Încarcă Fișier JSON
+                    </button>
+                  </div>
+                  
+                  <p className="text-blue-200 text-sm">
+                    Selectează un fișier JSON cu întrebări pentru a crea teste
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Info Section */}
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
           <h3 className="text-lg font-semibold text-white mb-3">Despre Platformă:</h3>
           <div className="text-blue-100 space-y-2">
-            <p>• Quiz-uri personalizate pentru admiterea la medicină</p>
-            <p>• Quiz-uri pe subiecte de câte 50 de întrebări pentru studiu eficient</p>
+            <p>• 5 teste generate automat cu întrebări amestecate</p>
+            <p>• Fiecare test conține 50 de întrebări pentru studiu eficient</p>
             <p>• Progresul este salvat automat în cloud</p>
-            <p>• Accesează quiz-urile de pe orice dispozitiv</p>
+            <p>• Accesează testele de pe orice dispozitiv</p>
             <p>• Explicații detaliate pentru fiecare răspuns</p>
             <p>• Fragmente relevante din cărțile de referință</p>
           </div>
