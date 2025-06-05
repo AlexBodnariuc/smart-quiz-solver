@@ -38,6 +38,7 @@ serve(async (req) => {
 
     console.log('Received request with message length:', message?.length);
     console.log('API key provided:', !!apiKey);
+    console.log('API key starts with:', apiKey?.substring(0, 10) + '...');
 
     // Validate inputs
     if (!message) {
@@ -62,7 +63,7 @@ serve(async (req) => {
 
     console.log('Preparing request to Respell API...');
 
-    // Create the request body for Respell API
+    // Create the request body for Respell API - using the correct format
     const respellRequestBody = {
       spellId: 'resp_6841cc306930819cbee23d3a2efe2ebe0e06ca3050f39bc8',
       inputs: {
@@ -70,7 +71,29 @@ serve(async (req) => {
       }
     };
 
-    console.log('Request body prepared, making API call...');
+    console.log('Request body for Respell:', JSON.stringify(respellRequestBody, null, 2));
+
+    // Test if we can make a simple request first
+    console.log('Testing network connectivity...');
+    try {
+      const testResponse = await fetch('https://httpbin.org/get', {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Supabase-Edge-Function/1.0'
+        }
+      });
+      console.log('Network test successful:', testResponse.status);
+    } catch (testError) {
+      console.error('Network test failed:', testError);
+      return new Response(JSON.stringify({ 
+        error: 'Probleme de conectivitate la rețea' 
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('Making request to Respell API...');
 
     // Make request to Respell API with proper headers and timeout
     const controller = new AbortController();
@@ -78,6 +101,7 @@ serve(async (req) => {
 
     let response;
     try {
+      // Try the run endpoint first
       response = await fetch('https://api.respell.ai/v1/run', {
         method: 'POST',
         headers: {
@@ -90,9 +114,15 @@ serve(async (req) => {
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
+      console.log('Respell API response received:', response.status);
     } catch (fetchError) {
       clearTimeout(timeoutId);
-      console.error('Network error calling Respell API:', fetchError);
+      console.error('Detailed fetch error:', {
+        name: fetchError.name,
+        message: fetchError.message,
+        stack: fetchError.stack,
+        cause: fetchError.cause
+      });
       
       if (fetchError.name === 'AbortError') {
         return new Response(JSON.stringify({ 
@@ -103,12 +133,28 @@ serve(async (req) => {
         });
       }
       
-      return new Response(JSON.stringify({ 
-        error: 'Eroare de rețea. Verificați conexiunea și încercați din nou.' 
-      }), {
-        status: 503,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      // Try alternative approach with different headers
+      console.log('Trying alternative request format...');
+      try {
+        const altResponse = await fetch('https://api.respell.ai/v1/run', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(respellRequestBody),
+        });
+        response = altResponse;
+        console.log('Alternative request successful:', response.status);
+      } catch (altError) {
+        console.error('Alternative request also failed:', altError);
+        return new Response(JSON.stringify({ 
+          error: 'Nu se poate conecta la serviciul Respell AI. Verificați cheia API și încercați din nou.' 
+        }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     console.log('Respell API response status:', response.status);
@@ -136,7 +182,8 @@ serve(async (req) => {
       }
       
       return new Response(JSON.stringify({ 
-        error: errorMessage 
+        error: errorMessage,
+        details: errorText
       }), {
         status: response.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -148,6 +195,7 @@ serve(async (req) => {
     try {
       data = await response.json();
       console.log('Respell API Response parsed successfully');
+      console.log('Response data structure:', JSON.stringify(data, null, 2));
     } catch (parseError) {
       console.error('Failed to parse Respell API response:', parseError);
       return new Response(JSON.stringify({ 
@@ -175,7 +223,7 @@ serve(async (req) => {
       aiResponse = data;
     } else {
       console.log('Unexpected response structure:', JSON.stringify(data, null, 2));
-      aiResponse = 'Ne pare rău, nu am putut genera un răspuns în formatul așteptat.';
+      aiResponse = 'Am primit un răspuns de la AI, dar nu pot să îl procesez în formatul așteptat.';
     }
 
     console.log('AI response extracted successfully, length:', aiResponse.length);
@@ -186,10 +234,15 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Unexpected error in chat-with-ai function:', error);
-    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     
     return new Response(JSON.stringify({ 
-      error: 'Ne pare rău, a apărut o eroare neașteptată. Încercați din nou.' 
+      error: 'Ne pare rău, a apărut o eroare neașteptată. Încercați din nou.',
+      details: error.message
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
