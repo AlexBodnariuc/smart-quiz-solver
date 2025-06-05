@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Brain, Plus, PlayCircle, Clock, CheckCircle } from 'lucide-react';
+import { Brain, Plus, PlayCircle, Clock, CheckCircle, Upload } from 'lucide-react';
 import { QuizData } from '@/pages/Index';
 import { parseQuizJSON } from '@/utils/csvParser';
 import { useQuizStorage } from '@/hooks/useQuizStorage';
@@ -23,6 +23,7 @@ interface QuizSession {
 export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [sessions, setSessions] = useState<QuizSession[]>([]);
+  const [showCreateOptions, setShowCreateOptions] = useState(false);
   const { getUserQuizSessions, loadQuizSession, saveQuizSession, loading: storageLoading } = useQuizStorage();
 
   const quizTitle = "Medmentor, ajutorul tau AI pentru admitere";
@@ -36,7 +37,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     setSessions(userSessions);
   };
 
-  const handleCreateNewQuiz = () => {
+  const handleCreateFromStorage = () => {
     setIsLoading(true);
     
     setTimeout(() => {
@@ -78,6 +79,47 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
       
       setIsLoading(false);
     }, 1000);
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/json') {
+      alert('Vă rugăm să selectați un fișier JSON valid.');
+      return;
+    }
+
+    setIsLoading(true);
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const questionData = JSON.parse(content);
+        const quizData = parseQuizJSON(questionData, `Quiz din ${file.name}`);
+        
+        // Save to server
+        saveQuizSession(quizData).then((sessionId) => {
+          console.log('Quiz saved to server with session ID:', sessionId);
+          onQuizLoad(quizData, sessionId);
+          loadUserSessions(); // Refresh the sessions list
+        }).catch((error) => {
+          console.error('Error saving quiz to server:', error);
+          // Fallback to local storage
+          onQuizLoad(quizData);
+        });
+      } catch (error) {
+        console.error('Error parsing JSON file:', error);
+        alert('Eroare la parsarea fișierului JSON. Vă rugăm să verificați formatul.');
+      } finally {
+        setIsLoading(false);
+        // Reset the input
+        event.target.value = '';
+      }
+    };
+    
+    reader.readAsText(file);
   };
 
   const handleLoadSession = async (session: QuizSession) => {
@@ -147,55 +189,22 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           </p>
         </div>
 
-        {/* Create New Quiz Button */}
-        <div className="text-center mb-8">
-          {hasStoredQuestions() ? (
-            <button
-              onClick={handleCreateNewQuiz}
-              disabled={isLoading || storageLoading}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading || storageLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                  Se creează quiz-ul...
-                </>
-              ) : (
-                <>
-                  <Plus className="h-6 w-6" />
-                  Creează Quiz Nou
-                </>
-              )}
-            </button>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-white mb-4">Quiz-ul nu este disponibil momentan. Vă rugăm să contactați administratorul.</p>
-              <button
-                disabled
-                className="inline-flex items-center gap-2 bg-gray-500 text-white px-8 py-4 rounded-xl font-semibold text-lg opacity-50 cursor-not-allowed"
-              >
-                Quiz indisponibil
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Quiz Sessions List */}
+        {/* Quiz Sessions List - Now prominently displayed at top */}
         {sessions.length > 0 && (
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 mb-6">
-            <h3 className="text-2xl font-bold text-white mb-6">Quiz-uri Disponibile</h3>
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-8">
+            <h2 className="text-3xl font-bold text-white mb-8 text-center">Quiz-uri Disponibile</h2>
             <div className="space-y-4">
               {sessions.map((session) => (
                 <div
                   key={session.id}
-                  className="bg-white/5 border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-all duration-300 cursor-pointer"
+                  className="bg-white/10 border border-white/20 rounded-xl p-6 hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-[1.02]"
                   onClick={() => handleLoadSession(session)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       {getSessionIcon(session)}
                       <div>
-                        <h4 className="text-white font-semibold">{session.title}</h4>
+                        <h4 className="text-white font-semibold text-lg">{session.title}</h4>
                         <p className="text-blue-200 text-sm">
                           {getSessionStatus(session)} • {formatDate(session.created_at)}
                         </p>
@@ -217,6 +226,61 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             </div>
           </div>
         )}
+
+        {/* Create New Quiz Section - Now less prominent at bottom */}
+        <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10 mb-6">
+          <div className="text-center">
+            <button
+              onClick={() => setShowCreateOptions(!showCreateOptions)}
+              className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-3 rounded-lg font-medium hover:bg-white/20 transition-all duration-300 border border-white/20"
+            >
+              <Plus className="h-5 w-5" />
+              Creează Quiz Nou
+            </button>
+            
+            {showCreateOptions && (
+              <div className="mt-6 space-y-4">
+                {hasStoredQuestions() && (
+                  <button
+                    onClick={handleCreateFromStorage}
+                    disabled={isLoading || storageLoading}
+                    className="block w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-lg font-medium hover:from-green-600 hover:to-emerald-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading || storageLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        Se creează quiz-ul...
+                      </div>
+                    ) : (
+                      'Folosește Quiz-ul Implicit'
+                    )}
+                  </button>
+                )}
+                
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={isLoading || storageLoading}
+                  />
+                  <button
+                    disabled={isLoading || storageLoading}
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Upload className="h-5 w-5" />
+                    Încarcă Fișier JSON
+                  </button>
+                </div>
+                
+                <p className="text-blue-200 text-sm">
+                  Selectează un fișier JSON cu întrebări pentru a crea un quiz personalizat
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Info Section */}
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
