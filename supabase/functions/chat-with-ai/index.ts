@@ -18,11 +18,18 @@ serve(async (req) => {
 
     console.log('Sending message to AI:', { message, aiId });
 
+    const respellApiKey = Deno.env.get('RESPELL_API_KEY');
+    
+    if (!respellApiKey) {
+      console.error('RESPELL_API_KEY not found in environment variables');
+      throw new Error('RESPELL_API_KEY not configured');
+    }
+
     // Make request to the specific AI model
     const response = await fetch('https://api.respell.ai/v1/run', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('RESPELL_API_KEY')}`,
+        'Authorization': `Bearer ${respellApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -33,17 +40,19 @@ serve(async (req) => {
       }),
     });
 
+    console.log('Respell API response status:', response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('AI API Error:', response.status, errorText);
-      throw new Error(`AI API request failed: ${response.status}`);
+      console.error('Respell API Error:', response.status, errorText);
+      throw new Error(`Respell API request failed: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('AI Response:', data);
+    console.log('Respell API Response:', data);
 
     // Extract the response from the AI
-    const aiResponse = data.outputs?.response || data.outputs?.message || 'Ne pare rău, nu am putut genera un răspuns.';
+    const aiResponse = data.outputs?.response || data.outputs?.message || data.response || 'Ne pare rău, nu am putut genera un răspuns.';
 
     return new Response(JSON.stringify({ response: aiResponse }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
