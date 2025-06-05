@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { Question } from '@/pages/Index';
 import { CheckCircle, XCircle, Eye } from 'lucide-react';
+import { PassageDisplay } from './PassageDisplay';
+import { ProcessedChunk } from '@/utils/csvParser';
 
 interface QuestionCardProps {
   question: Question;
@@ -56,6 +58,20 @@ export const QuestionCard = ({
     return null;
   };
 
+  // Parse passage data if available
+  const getPassageChunks = (): ProcessedChunk[] => {
+    if (!question.passage) return [];
+    
+    try {
+      const parsed = JSON.parse(question.passage);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const passageChunks = getPassageChunks();
+
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
       {/* Question Header */}
@@ -102,8 +118,15 @@ export const QuestionCard = ({
           </button>
           
           {showExplanation && (
-            <div className="bg-blue-900/30 rounded-xl p-4 border border-blue-400/30">
-              <p className="text-blue-100 leading-relaxed">{question.explanation}</p>
+            <div>
+              <div className="bg-blue-900/30 rounded-xl p-4 border border-blue-400/30 mb-4">
+                <p className="text-blue-100 leading-relaxed">{question.explanation}</p>
+              </div>
+              
+              {/* Display passage chunks */}
+              {passageChunks.length > 0 && (
+                <PassageDisplay chunks={passageChunks} />
+              )}
             </div>
           )}
         </div>

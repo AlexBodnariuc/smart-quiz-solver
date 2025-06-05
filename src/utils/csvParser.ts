@@ -11,8 +11,22 @@ interface JSONQuestionData {
   agentResponse: {
     answer: string;
     explanation: string;
-    relevantChunks?: any[];
+    relevantChunks?: Array<{
+      text: string;
+      metadata?: {
+        page?: number;
+        source?: string;
+      };
+      score?: number;
+    }>;
   };
+}
+
+export interface ProcessedChunk {
+  text: string;
+  page?: number;
+  source?: string;
+  score?: number;
 }
 
 export const parseQuizJSON = (jsonData: JSONQuestionData[], quizTitle: string): QuizData => {
@@ -47,14 +61,21 @@ export const parseQuizJSON = (jsonData: JSONQuestionData[], quizTitle: string): 
     
     console.log(`Question ${index + 1} correct answer index:`, correctAnswerIndex);
     
+    // Process relevant chunks
+    const processedChunks: ProcessedChunk[] = item.agentResponse.relevantChunks?.map(chunk => ({
+      text: chunk.text,
+      page: chunk.metadata?.page,
+      source: chunk.metadata?.source,
+      score: chunk.score
+    })) || [];
+    
     const question: Question = {
       id: item.questionId || `question-${index}`,
       text: item.originalQuestion.question,
       variants: item.originalQuestion.variants,
       correctAnswer: correctAnswerIndex,
       explanation: item.agentResponse.explanation,
-      passage: item.agentResponse.relevantChunks ? 
-        JSON.stringify(item.agentResponse.relevantChunks, null, 2) : undefined
+      passage: processedChunks.length > 0 ? JSON.stringify(processedChunks) : undefined
     };
     
     return question;
