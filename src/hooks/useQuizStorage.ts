@@ -135,32 +135,33 @@ export const useQuizStorage = () => {
     }
   };
 
-  // New function to get all questions from the database
+  // Enhanced function to get all unique questions from uploaded quiz sessions only
   const getAllQuestionsFromDatabase = async (): Promise<Question[]> => {
     setLoading(true);
     setError(null);
 
     try {
-      console.log('Loading all questions from database...');
+      console.log('Loading all questions from uploaded quiz sessions...');
       
-      // Get all questions from all sessions that are NOT generated subject tests
+      // Get all questions from quiz sessions that are NOT generated subject tests
+      // We identify uploaded quizzes by excluding ones that start with "Subiect"
       const { data: questionsData, error: questionsError } = await supabase
         .from('quiz_session_questions')
         .select(`
           *,
-          quiz_sessions!inner(title)
+          quiz_sessions!inner(title, created_at)
         `)
         .not('quiz_sessions.title', 'like', 'Subiect%');
 
       if (questionsError) throw questionsError;
 
-      console.log(`Found ${questionsData?.length || 0} questions in database`);
+      console.log(`Found ${questionsData?.length || 0} questions from uploaded quiz sessions`);
 
       if (!questionsData || questionsData.length === 0) {
         return [];
       }
 
-      // Convert to Question format and remove duplicates based on question text
+      // Convert to Question format
       const allQuestions: Question[] = questionsData.map(q => ({
         id: q.question_id,
         text: q.question_text,
@@ -170,12 +171,15 @@ export const useQuizStorage = () => {
         passage: q.passage ? JSON.stringify(q.passage) : undefined
       }));
 
-      // Remove duplicates based on question text
-      const uniqueQuestions = allQuestions.filter((question, index, self) => 
-        index === self.findIndex(q => q.text === question.text)
-      );
+      // Remove duplicates based on question text (more thorough deduplication)
+      const uniqueQuestions = allQuestions.filter((question, index, self) => {
+        const firstIndex = self.findIndex(q => 
+          q.text.trim().toLowerCase() === question.text.trim().toLowerCase()
+        );
+        return index === firstIndex;
+      });
 
-      console.log(`After removing duplicates: ${uniqueQuestions.length} unique questions`);
+      console.log(`After removing duplicates: ${uniqueQuestions.length} unique questions available for quiz generation`);
       return uniqueQuestions;
 
     } catch (err: any) {
@@ -184,6 +188,21 @@ export const useQuizStorage = () => {
       return [];
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Enhanced function to get total count of all questions including generated tests
+  const getTotalQuestionCount = async (): Promise<number> => {
+    try {
+      const { count, error } = await supabase
+        .from('quiz_session_questions')
+        .select('*', { count: 'exact', head: true });
+
+      if (error) throw error;
+      return count || 0;
+    } catch (err: any) {
+      console.error('Error getting total question count:', err);
+      return 0;
     }
   };
 
@@ -318,6 +337,7 @@ export const useQuizStorage = () => {
     loadQuizSession,
     getUserQuizSessions,
     getAllQuestionsFromDatabase,
+    getTotalQuestionCount,
     deleteSubjectQuizzes,
     saveQuizProgress,
     completeQuizSession

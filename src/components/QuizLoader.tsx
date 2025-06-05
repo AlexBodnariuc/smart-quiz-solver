@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Brain, Plus, PlayCircle, Clock, CheckCircle, Upload, Shuffle, RefreshCw } from 'lucide-react';
 import { QuizData, Question } from '@/pages/Index';
@@ -25,11 +26,13 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   const [showCreateOptions, setShowCreateOptions] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
+  const [totalQuestionCount, setTotalQuestionCount] = useState(0);
   const { 
     getUserQuizSessions, 
     loadQuizSession, 
     saveQuizSession, 
     getAllQuestionsFromDatabase,
+    getTotalQuestionCount,
     deleteSubjectQuizzes,
     loading: storageLoading 
   } = useQuizStorage();
@@ -41,9 +44,8 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   }, []);
 
   useEffect(() => {
-    if (sessions.length > 0) {
-      loadAllQuestionsFromDatabase();
-    }
+    loadAllQuestionsFromDatabase();
+    loadTotalQuestionCount();
   }, [sessions]);
 
   const loadUserSessions = async () => {
@@ -51,17 +53,22 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     setSessions(userSessions);
   };
 
+  const loadTotalQuestionCount = async () => {
+    const count = await getTotalQuestionCount();
+    setTotalQuestionCount(count);
+  };
+
   const loadAllQuestionsFromDatabase = async () => {
-    console.log('Loading all questions from database...');
+    console.log('Loading all questions from uploaded quiz sessions...');
     
     try {
-      // Load all questions from database (excluding generated subject tests)
+      // Load all questions from uploaded quiz sessions (excluding generated tests)
       const questionsFromDatabase = await getAllQuestionsFromDatabase();
       
-      console.log(`Loaded ${questionsFromDatabase.length} questions from database`);
+      console.log(`Loaded ${questionsFromDatabase.length} unique questions from uploaded quiz sessions`);
       setAllQuestions(questionsFromDatabase);
 
-      // Auto-generate 5 tests if we have questions and no Subiect tests exist
+      // Auto-generate 5 tests if we have enough questions and no Subiect tests exist
       const existingSubjects = sessions.filter(s => s.title.startsWith('Subiect'));
       if (questionsFromDatabase.length >= 50 && existingSubjects.length === 0) {
         console.log('Auto-generating 5 subject tests...');
@@ -154,8 +161,9 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         }
       }
 
-      // Refresh the sessions list
+      // Refresh the sessions list and question counts
       await loadUserSessions();
+      await loadTotalQuestionCount();
       
       alert(`S-au generat ${count} quiz-uri noi cu câte 50 de întrebări unice din ${validQuestions.length} întrebări disponibile!`);
     } catch (error) {
@@ -237,8 +245,9 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         // Refresh sessions and reload all questions
         await loadUserSessions();
         await loadAllQuestionsFromDatabase();
+        await loadTotalQuestionCount();
         
-        alert(`S-au încărcat ${quizData.questions.length} întrebări din fișierul ${file.name}!`);
+        alert(`S-au încărcat ${quizData.questions.length} întrebări din fișierul ${file.name}! Acum sunt disponibile ${allQuestions.length + quizData.questions.length} întrebări pentru generarea testelor.`);
         
       } catch (error) {
         console.error('Error parsing JSON file:', error);
@@ -299,6 +308,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
 
   // Filter to show only generated subject quizzes
   const subjectQuizzes = sessions.filter(session => session.title.startsWith('Subiect'));
+  const uploadedQuizzes = sessions.filter(session => !session.title.startsWith('Subiect'));
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
@@ -316,11 +326,30 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
             Bun venit! Alege un test pentru a începe studiul.
           </p>
-          {allQuestions.length > 0 && (
-            <p className="text-cyan-300 mt-4">
-              📚 {allQuestions.length} întrebări disponibile în baza de date
-            </p>
-          )}
+          
+          {/* Enhanced Question Statistics */}
+          <div className="mt-6 bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-cyan-300 text-lg font-semibold">
+                  📚 {allQuestions.length} întrebări unice
+                </p>
+                <p className="text-cyan-200 text-sm">disponibile pentru teste</p>
+              </div>
+              <div>
+                <p className="text-purple-300 text-lg font-semibold">
+                  🗂️ {uploadedQuizzes.length} quiz-uri încărcate
+                </p>
+                <p className="text-purple-200 text-sm">de către utilizator</p>
+              </div>
+              <div>
+                <p className="text-green-300 text-lg font-semibold">
+                  📊 {totalQuestionCount} întrebări totale
+                </p>
+                <p className="text-green-200 text-sm">în baza de date</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Loading State */}
@@ -332,7 +361,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
                 <h2 className="text-2xl font-bold text-white">Se generează testele...</h2>
               </div>
               <p className="text-purple-100">
-                Creez 5 teste diverse cu câte 50 de întrebări din {allQuestions.length} întrebări disponibile
+                Creez 5 teste diverse cu câte 50 de întrebări din {allQuestions.length} întrebări unice disponibile
               </p>
             </div>
           </div>
@@ -382,7 +411,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
                   {isGenerating ? 'Se regenerează...' : 'Regenerează Testele'}
                 </button>
                 <p className="text-purple-200 text-sm mt-2">
-                  Creează 5 teste noi cu întrebări diverse și unice din baza de date
+                  Creează 5 teste noi cu întrebări diverse și unice din {allQuestions.length} întrebări disponibile
                 </p>
               </div>
             )}
@@ -436,7 +465,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           </div>
         </div>
 
-        {/* Info Section */}
+        {/* Enhanced Info Section */}
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
           <h3 className="text-lg font-semibold text-white mb-3">Despre Platformă:</h3>
           <div className="text-blue-100 space-y-2">
@@ -448,6 +477,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             <p>• Accesează testele de pe orice dispozitiv</p>
             <p>• Explicații detaliate pentru fiecare răspuns</p>
             <p>• Fragmente relevante din cărțile de referință</p>
+            <p>• Monitorizarea precisă a numărului de întrebări disponibile</p>
           </div>
         </div>
       </div>
