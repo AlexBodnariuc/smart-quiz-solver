@@ -1,7 +1,8 @@
 
 import { useState } from 'react';
-import { Upload, FileText, Brain } from 'lucide-react';
+import { Upload, FileText, Brain, Plus } from 'lucide-react';
 import { QuizData } from '@/pages/Index';
+import { parseCSV, mergeQuizData, CSVQuestionVariants, JSONQuestionData } from '@/utils/csvParser';
 
 interface QuizLoaderProps {
   onQuizLoad: (data: QuizData) => void;
@@ -11,23 +12,38 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [csvData, setCsvData] = useState<CSVQuestionVariants[] | null>(null);
+  const [jsonData, setJsonData] = useState<JSONQuestionData[] | null>(null);
+  const [quizTitle, setQuizTitle] = useState('');
 
-  const handleFileUpload = async (file: File) => {
+  const handleFileUpload = async (file: File, fileType: 'csv' | 'json') => {
     setIsLoading(true);
     setError(null);
 
     try {
       const text = await file.text();
-      const data = JSON.parse(text) as QuizData;
       
-      // Validate the data structure
-      if (!data.id || !data.title || !Array.isArray(data.questions)) {
-        throw new Error('Format invalid de quiz. Asigură-te că JSON-ul conține id, title și questions.');
+      if (fileType === 'csv') {
+        const parsedCSV = parseCSV(text);
+        setCsvData(parsedCSV);
+      } else {
+        const parsedJSON = JSON.parse(text) as JSONQuestionData[];
+        
+        // Validate JSON structure
+        if (!Array.isArray(parsedJSON)) {
+          throw new Error('JSON-ul trebuie să conțină un array de întrebări.');
+        }
+        
+        parsedJSON.forEach((item, index) => {
+          if (!item.id || !item.text || typeof item.correctAnswer !== 'number' || !item.explanation) {
+            throw new Error(`Întrebarea ${index + 1} nu are structura corectă (lipsesc: id, text, correctAnswer sau explanation).`);
+          }
+        });
+        
+        setJsonData(parsedJSON);
       }
-
-      onQuizLoad(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Eroare la încărcarea fișierului');
+      setError(err instanceof Error ? err.message : `Eroare la încărcarea fișierului ${fileType.toUpperCase()}`);
     } finally {
       setIsLoading(false);
     }
@@ -38,17 +54,35 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     setIsDragOver(false);
     
     const file = e.dataTransfer.files[0];
-    if (file && file.type === 'application/json') {
-      handleFileUpload(file);
-    } else {
-      setError('Te rog să încarci un fișier JSON valid.');
+    if (file) {
+      if (file.name.endsWith('.csv')) {
+        handleFileUpload(file, 'csv');
+      } else if (file.name.endsWith('.json')) {
+        handleFileUpload(file, 'json');
+      } else {
+        setError('Te rog să încarci fișiere CSV sau JSON valide.');
+      }
     }
   };
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>, fileType: 'csv' | 'json') => {
     const file = e.target.files?.[0];
     if (file) {
-      handleFileUpload(file);
+      handleFileUpload(file, fileType);
+    }
+  };
+
+  const createQuiz = () => {
+    if (!csvData || !jsonData || !quizTitle.trim()) {
+      setError('Te rog să încarci ambele fișiere și să introduci titlul quiz-ului.');
+      return;
+    }
+
+    try {
+      const mergedData = mergeQuizData(csvData, jsonData, quizTitle.trim());
+      onQuizLoad(mergedData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Eroare la combinarea datelor.');
     }
   };
 
@@ -101,15 +135,71 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent"> Quiz</span>
           </h1>
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
-            Încarcă fișierul JSON cu întrebările tale și începe să îți testezi cunoștințele
+            Încarcă fișierul CSV cu variante și JSON cu întrebările tale pentru a crea quiz-ul
           </p>
         </div>
 
-        {/* Upload Area */}
-        <div className="grid md:grid-cols-2 gap-8 mb-8">
+        {/* Quiz Title Input */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-6 border border-white/20">
+          <label className="block text-white font-semibold mb-2">Titlul Quiz-ului</label>
+          <input
+            type="text"
+            value={quizTitle}
+            onChange={(e) => setQuizTitle(e.target.value)}
+            placeholder="Introdu titlul quiz-ului..."
+            className="w-full px-4 py-3 bg-white/20 border border-white/30 rounded-xl text-white placeholder-white/60 focus:outline-none focus:border-cyan-400 focus:bg-white/30 transition-all"
+          />
+        </div>
+
+        {/* Upload Areas */}
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
+          {/* CSV Upload */}
           <div
             className={`
-              relative border-2 border-dashed rounded-3xl p-8 text-center transition-all duration-300
+              relative border-2 border-dashed rounded-3xl p-6 text-center transition-all duration-300
+              ${isDragOver 
+                ? 'border-cyan-400 bg-cyan-500/20' 
+                : 'border-white/30 bg-white/10 hover:bg-white/20'
+              }
+              backdrop-blur-lg
+            `}
+            onDrop={handleDrop}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragOver(true);
+            }}
+            onDragLeave={() => setIsDragOver(false)}
+          >
+            <input
+              type="file"
+              accept=".csv"
+              onChange={(e) => handleFileInput(e, 'csv')}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              disabled={isLoading}
+            />
+            
+            <div className="flex flex-col items-center">
+              <div className="bg-gradient-to-r from-orange-500 to-red-600 p-3 rounded-xl mb-3">
+                <Upload className="h-6 w-6 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                Încarcă CSV cu Variante
+              </h3>
+              <p className="text-blue-100 text-sm mb-2">
+                {csvData ? '✓ CSV încărcat' : 'Drag & drop sau click'}
+              </p>
+              {csvData && (
+                <p className="text-green-300 text-xs">
+                  {csvData.length} întrebări găsite
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* JSON Upload */}
+          <div
+            className={`
+              relative border-2 border-dashed rounded-3xl p-6 text-center transition-all duration-300
               ${isDragOver 
                 ? 'border-cyan-400 bg-cyan-500/20' 
                 : 'border-white/30 bg-white/10 hover:bg-white/20'
@@ -126,79 +216,104 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             <input
               type="file"
               accept=".json"
-              onChange={handleFileInput}
+              onChange={(e) => handleFileInput(e, 'json')}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               disabled={isLoading}
             />
             
             <div className="flex flex-col items-center">
-              <div className="bg-gradient-to-r from-cyan-500 to-blue-600 p-4 rounded-xl mb-4">
-                <Upload className="h-8 w-8 text-white" />
+              <div className="bg-gradient-to-r from-cyan-500 to-blue-600 p-3 rounded-xl mb-3">
+                <FileText className="h-6 w-6 text-white" />
               </div>
-              <h3 className="text-xl font-semibold text-white mb-2">
-                Încarcă Quiz JSON
+              <h3 className="text-lg font-semibold text-white mb-2">
+                Încarcă JSON cu Date
               </h3>
-              <p className="text-blue-100 text-sm">
-                Drag & drop sau click pentru a selecta fișierul
+              <p className="text-blue-100 text-sm mb-2">
+                {jsonData ? '✓ JSON încărcat' : 'Drag & drop sau click'}
               </p>
+              {jsonData && (
+                <p className="text-green-300 text-xs">
+                  {jsonData.length} întrebări găsite
+                </p>
+              )}
             </div>
           </div>
+        </div>
 
-          <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
-            <div className="flex flex-col items-center text-center">
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-4 rounded-xl mb-4">
-                <FileText className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">
-                Încearcă Quiz Demo
-              </h3>
-              <p className="text-blue-100 text-sm mb-6">
-                Testează platforma cu un quiz de demonstrație
-              </p>
-              <button
-                onClick={loadSampleQuiz}
-                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
-              >
-                Încarcă Demo
-              </button>
+        {/* Create Quiz Button */}
+        {csvData && jsonData && quizTitle.trim() && (
+          <div className="text-center mb-6">
+            <button
+              onClick={createQuiz}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              <Plus className="h-6 w-6" />
+              Creează Quiz-ul
+            </button>
+          </div>
+        )}
+
+        {/* Demo Option */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-6 border border-white/20 text-center mb-6">
+          <div className="flex flex-col items-center">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-3 rounded-xl mb-3">
+              <FileText className="h-6 w-6 text-white" />
             </div>
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Sau Încearcă Quiz Demo
+            </h3>
+            <p className="text-blue-100 text-sm mb-4">
+              Testează platforma cu un quiz de demonstrație
+            </p>
+            <button
+              onClick={loadSampleQuiz}
+              className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              Încarcă Demo
+            </button>
           </div>
         </div>
 
         {/* Loading State */}
         {isLoading && (
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 text-center">
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 text-center mb-6">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400 mx-auto mb-4"></div>
-            <p className="text-white">Se încarcă quiz-ul...</p>
+            <p className="text-white">Se procesează fișierul...</p>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-500/20 backdrop-blur-lg rounded-2xl p-6 border border-red-400/30 text-center">
+          <div className="bg-red-500/20 backdrop-blur-lg rounded-2xl p-6 border border-red-400/30 text-center mb-6">
             <p className="text-red-200">{error}</p>
           </div>
         )}
 
         {/* Format Info */}
-        <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
-          <h3 className="text-lg font-semibold text-white mb-3">Format JSON Așteptat:</h3>
-          <pre className="text-sm text-blue-100 bg-black/30 p-4 rounded-lg overflow-x-auto">
-{`{
-  "id": "quiz-1",
-  "title": "Titlul Quiz-ului",
-  "questions": [
-    {
-      "id": "q1",
-      "text": "Întrebarea aici?",
-      "variants": ["Opțiunea A", "Opțiunea B", "Opțiunea C", "Opțiunea D"],
-      "correctAnswer": 0,
-      "passage": "Text opțional pentru context",
-      "explanation": "Explicația răspunsului corect"
-    }
-  ]
-}`}
-          </pre>
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
+            <h3 className="text-lg font-semibold text-white mb-3">Format CSV (Variante):</h3>
+            <pre className="text-sm text-blue-100 bg-black/30 p-4 rounded-lg overflow-x-auto">
+{`questionId,variant1,variant2,variant3,variant4
+q1,Opțiunea A,Opțiunea B,Opțiunea C,Opțiunea D
+q2,Răspuns 1,Răspuns 2,Răspuns 3,Răspuns 4`}
+            </pre>
+          </div>
+
+          <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
+            <h3 className="text-lg font-semibold text-white mb-3">Format JSON (Date):</h3>
+            <pre className="text-sm text-blue-100 bg-black/30 p-4 rounded-lg overflow-x-auto">
+{`[
+  {
+    "id": "q1",
+    "text": "Întrebarea aici?",
+    "correctAnswer": 0,
+    "explanation": "Explicația...",
+    "passage": "Pasaj opțional..."
+  }
+]`}
+            </pre>
+          </div>
         </div>
       </div>
     </div>
