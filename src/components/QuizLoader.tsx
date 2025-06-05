@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Brain, Plus, PlayCircle, Clock, CheckCircle, Upload, Shuffle, RefreshCw } from 'lucide-react';
 import { QuizData, Question } from '@/pages/Index';
@@ -26,7 +25,14 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
   const [showCreateOptions, setShowCreateOptions] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
-  const { getUserQuizSessions, loadQuizSession, saveQuizSession, loading: storageLoading } = useQuizStorage();
+  const { 
+    getUserQuizSessions, 
+    loadQuizSession, 
+    saveQuizSession, 
+    getAllQuestionsFromDatabase,
+    deleteSubjectQuizzes,
+    loading: storageLoading 
+  } = useQuizStorage();
 
   const quizTitle = "Medmentor, ajutorul tau AI pentru admitere";
 
@@ -36,7 +42,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
 
   useEffect(() => {
     if (sessions.length > 0) {
-      loadAllQuestions();
+      loadAllQuestionsFromDatabase();
     }
   }, [sessions]);
 
@@ -45,51 +51,37 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     setSessions(userSessions);
   };
 
-  const loadAllQuestions = async () => {
-    console.log('Loading all questions from all sessions...');
-    const questionsFromSessions: Question[] = [];
+  const loadAllQuestionsFromDatabase = async () => {
+    console.log('Loading all questions from database...');
     
-    // Load questions from all non-Subiect sessions (to avoid loading generated tests)
-    for (const session of sessions) {
-      if (!session.title.startsWith('Subiect')) {
+    try {
+      // Load all questions from database (excluding generated subject tests)
+      const questionsFromDatabase = await getAllQuestionsFromDatabase();
+      
+      console.log(`Loaded ${questionsFromDatabase.length} questions from database`);
+      setAllQuestions(questionsFromDatabase);
+
+      // Auto-generate 5 tests if we have questions and no Subiect tests exist
+      const existingSubjects = sessions.filter(s => s.title.startsWith('Subiect'));
+      if (questionsFromDatabase.length >= 50 && existingSubjects.length === 0) {
+        console.log('Auto-generating 5 subject tests...');
+        generateDiverseQuizzes(5, questionsFromDatabase);
+      }
+    } catch (error) {
+      console.error('Error loading questions from database:', error);
+      
+      // Fallback to localStorage if database fails
+      const storedQuestions = localStorage.getItem('quizQuestions');
+      if (storedQuestions) {
         try {
-          const quizData = await loadQuizSession(session.id);
-          if (quizData && quizData.questions) {
-            questionsFromSessions.push(...quizData.questions);
-            console.log(`Loaded ${quizData.questions.length} questions from ${session.title}`);
-          }
-        } catch (error) {
-          console.error(`Error loading questions from session ${session.id}:`, error);
+          const questionData = JSON.parse(storedQuestions);
+          const quizData = parseQuizJSON(questionData, quizTitle);
+          setAllQuestions(quizData.questions);
+          console.log(`Fallback: Loaded ${quizData.questions.length} questions from localStorage`);
+        } catch (parseError) {
+          console.error('Error parsing localStorage questions:', parseError);
         }
       }
-    }
-
-    // Also try to load from localStorage as fallback
-    const storedQuestions = localStorage.getItem('quizQuestions');
-    if (storedQuestions) {
-      try {
-        const questionData = JSON.parse(storedQuestions);
-        const quizData = parseQuizJSON(questionData, quizTitle);
-        questionsFromSessions.push(...quizData.questions);
-        console.log(`Loaded ${quizData.questions.length} questions from localStorage`);
-      } catch (error) {
-        console.error('Error loading questions from localStorage:', error);
-      }
-    }
-
-    // Remove duplicates based on question text
-    const uniqueQuestions = questionsFromSessions.filter((question, index, self) => 
-      index === self.findIndex(q => q.text === question.text)
-    );
-
-    console.log(`Total unique questions available: ${uniqueQuestions.length}`);
-    setAllQuestions(uniqueQuestions);
-
-    // Auto-generate 5 tests if we have questions and no Subiect tests exist
-    const existingSubjects = sessions.filter(s => s.title.startsWith('Subiect'));
-    if (uniqueQuestions.length >= 50 && existingSubjects.length === 0) {
-      console.log('Auto-generating 5 subject tests...');
-      generateDiverseQuizzes(5, uniqueQuestions);
     }
   };
 
@@ -117,20 +109,12 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
 
       console.log(`Generating ${count} diverse quizzes from ${validQuestions.length} available questions`);
 
+      // Delete existing subject quizzes first
+      await deleteSubjectQuizzes();
+
       // Create a shuffled pool of questions for each quiz generation
       const questionPool = [...validQuestions];
       
-      // Delete existing subject quizzes first
-      const existingSubjects = sessions.filter(s => s.title.startsWith('Subiect'));
-      for (const subject of existingSubjects) {
-        try {
-          // Note: We don't have a delete function in useQuizStorage, so we'll just overwrite
-          console.log(`Will overwrite existing ${subject.title}`);
-        } catch (error) {
-          console.error(`Error preparing to overwrite ${subject.title}:`, error);
-        }
-      }
-
       // Generate exactly the requested number of quizzes
       for (let i = 0; i < count; i++) {
         // Shuffle the entire question pool for this quiz
@@ -226,7 +210,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     }, 1000);
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -238,22 +222,24 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     setIsLoading(true);
     const reader = new FileReader();
     
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const content = e.target?.result as string;
         const questionData = JSON.parse(content);
         const quizData = parseQuizJSON(questionData, `Quiz din ${file.name}`);
         
+        console.log(`Uploading ${quizData.questions.length} questions from ${file.name}`);
+        
         // Save to server
-        saveQuizSession(quizData).then((sessionId) => {
-          console.log('Quiz saved to server with session ID:', sessionId);
-          onQuizLoad(quizData, sessionId);
-          loadUserSessions(); // Refresh the sessions list
-        }).catch((error) => {
-          console.error('Error saving quiz to server:', error);
-          // Fallback to local storage
-          onQuizLoad(quizData);
-        });
+        const sessionId = await saveQuizSession(quizData);
+        console.log('Quiz saved to server with session ID:', sessionId);
+        
+        // Refresh sessions and reload all questions
+        await loadUserSessions();
+        await loadAllQuestionsFromDatabase();
+        
+        alert(`S-au încărcat ${quizData.questions.length} întrebări din fișierul ${file.name}!`);
+        
       } catch (error) {
         console.error('Error parsing JSON file:', error);
         alert('Eroare la parsarea fișierului JSON. Vă rugăm să verificați formatul.');
@@ -332,7 +318,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           </p>
           {allQuestions.length > 0 && (
             <p className="text-cyan-300 mt-4">
-              📚 {allQuestions.length} întrebări disponibile în total
+              📚 {allQuestions.length} întrebări disponibile în baza de date
             </p>
           )}
         </div>
@@ -396,7 +382,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
                   {isGenerating ? 'Se regenerează...' : 'Regenerează Testele'}
                 </button>
                 <p className="text-purple-200 text-sm mt-2">
-                  Creează 5 teste noi cu întrebări diverse și unice
+                  Creează 5 teste noi cu întrebări diverse și unice din baza de date
                 </p>
               </div>
             )}
@@ -435,13 +421,13 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
                 </div>
                 
                 <p className="text-blue-200 text-sm">
-                  Selectează un fișier JSON cu întrebări noi pentru a le adăuga la baza de date și a regenera testele
+                  Selectează un fișier JSON cu întrebări noi pentru a le adăuga la baza de date și a regenera testele automat
                 </p>
                 
                 {allQuestions.length > 0 && (
                   <div className="bg-cyan-500/10 border border-cyan-400/30 rounded-lg p-4 mt-4">
                     <p className="text-cyan-200 text-sm">
-                      💡 <strong>Sfat:</strong> După încărcarea întrebărilor noi, testele vor fi regenerate automat pentru a include noile întrebări în amestecul de teste diverse.
+                      💡 <strong>Sfat:</strong> După încărcarea întrebărilor noi, toate întrebările vor fi disponibile în baza de date și testele vor fi regenerate automat pentru a include noile întrebări.
                     </p>
                   </div>
                 )}
@@ -454,6 +440,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
           <h3 className="text-lg font-semibold text-white mb-3">Despre Platformă:</h3>
           <div className="text-blue-100 space-y-2">
+            <p>• Toate întrebările sunt stocate permanent în baza de date</p>
             <p>• 5 teste generate automat cu întrebări diverse și unice</p>
             <p>• Fiecare test conține exact 50 de întrebări selectate inteligent</p>
             <p>• Algoritmul asigură diversitatea și non-duplicarea întrebărilor</p>

@@ -135,6 +135,106 @@ export const useQuizStorage = () => {
     }
   };
 
+  // New function to get all questions from the database
+  const getAllQuestionsFromDatabase = async (): Promise<Question[]> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('Loading all questions from database...');
+      
+      // Get all questions from all sessions that are NOT generated subject tests
+      const { data: questionsData, error: questionsError } = await supabase
+        .from('quiz_session_questions')
+        .select(`
+          *,
+          quiz_sessions!inner(title)
+        `)
+        .not('quiz_sessions.title', 'like', 'Subiect%');
+
+      if (questionsError) throw questionsError;
+
+      console.log(`Found ${questionsData?.length || 0} questions in database`);
+
+      if (!questionsData || questionsData.length === 0) {
+        return [];
+      }
+
+      // Convert to Question format and remove duplicates based on question text
+      const allQuestions: Question[] = questionsData.map(q => ({
+        id: q.question_id,
+        text: q.question_text,
+        variants: q.variants as string[],
+        correctAnswer: q.correct_answer,
+        explanation: q.explanation || '',
+        passage: q.passage ? JSON.stringify(q.passage) : undefined
+      }));
+
+      // Remove duplicates based on question text
+      const uniqueQuestions = allQuestions.filter((question, index, self) => 
+        index === self.findIndex(q => q.text === question.text)
+      );
+
+      console.log(`After removing duplicates: ${uniqueQuestions.length} unique questions`);
+      return uniqueQuestions;
+
+    } catch (err: any) {
+      console.error('Error loading all questions from database:', err);
+      setError(err.message);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to delete existing subject quizzes
+  const deleteSubjectQuizzes = async (): Promise<void> => {
+    try {
+      console.log('Deleting existing subject quizzes...');
+      
+      // Get all subject quiz sessions
+      const { data: subjectSessions, error: fetchError } = await supabase
+        .from('quiz_sessions')
+        .select('id')
+        .like('title', 'Subiect%');
+
+      if (fetchError) throw fetchError;
+
+      if (subjectSessions && subjectSessions.length > 0) {
+        const sessionIds = subjectSessions.map(s => s.id);
+
+        // Delete questions first (due to foreign key constraints)
+        const { error: questionsDeleteError } = await supabase
+          .from('quiz_session_questions')
+          .delete()
+          .in('quiz_session_id', sessionIds);
+
+        if (questionsDeleteError) throw questionsDeleteError;
+
+        // Delete answers
+        const { error: answersDeleteError } = await supabase
+          .from('quiz_answers')
+          .delete()
+          .in('quiz_session_id', sessionIds);
+
+        if (answersDeleteError) throw answersDeleteError;
+
+        // Delete sessions
+        const { error: sessionsDeleteError } = await supabase
+          .from('quiz_sessions')
+          .delete()
+          .in('id', sessionIds);
+
+        if (sessionsDeleteError) throw sessionsDeleteError;
+
+        console.log(`Deleted ${subjectSessions.length} existing subject quizzes`);
+      }
+    } catch (err: any) {
+      console.error('Error deleting subject quizzes:', err);
+      throw err;
+    }
+  };
+
   const saveQuizProgress = async (
     sessionId: string, 
     currentQuestionIndex: number, 
@@ -217,6 +317,8 @@ export const useQuizStorage = () => {
     saveQuizSession,
     loadQuizSession,
     getUserQuizSessions,
+    getAllQuestionsFromDatabase,
+    deleteSubjectQuizzes,
     saveQuizProgress,
     completeQuizSession
   };
