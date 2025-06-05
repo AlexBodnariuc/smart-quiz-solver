@@ -23,13 +23,19 @@ const Index = () => {
   const [isQuizStarted, setIsQuizStarted] = useState(false);
 
   const handleQuizLoad = (data: QuizData) => {
-    console.log('Quiz loaded:', data);
+    console.log('Quiz loaded successfully:', data);
+    console.log('Number of questions:', data.questions.length);
     setQuizData(data);
     setIsQuizStarted(false); // Reset quiz started state
   };
 
   const handleStartQuiz = () => {
     console.log('Starting quiz:', quizData?.title);
+    console.log('Quiz data before starting:', quizData);
+    if (!quizData) {
+      console.error('No quiz data available to start');
+      return;
+    }
     setIsQuizStarted(true);
   };
 
@@ -44,6 +50,8 @@ const Index = () => {
     setQuizData(null);
     setIsQuizStarted(false);
   };
+
+  console.log('Current state - quizData:', !!quizData, 'isQuizStarted:', isQuizStarted);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
@@ -70,6 +78,11 @@ const Index = () => {
                 >
                   Încarcă Alt Quiz
                 </button>
+              </div>
+              
+              {/* Debug info */}
+              <div className="mt-6 text-sm text-blue-200 opacity-70">
+                Debug: Quiz loaded with {quizData.questions.length} questions
               </div>
             </div>
           </div>

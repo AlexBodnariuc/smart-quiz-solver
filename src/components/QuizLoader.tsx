@@ -42,6 +42,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         }
       });
       
+      console.log('JSON file validated successfully, setting data:', parsedJSON);
       setJsonData(parsedJSON);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Eroare la încărcarea fișierului JSON');
@@ -78,9 +79,16 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
     }
 
     try {
+      console.log('Creating quiz with data:', jsonData);
+      console.log('Quiz title:', quizTitle.trim());
+      
       const quizData = parseQuizJSON(jsonData, quizTitle.trim());
+      console.log('Quiz created successfully:', quizData);
+      console.log('Calling onQuizLoad with:', quizData);
+      
       onQuizLoad(quizData);
     } catch (err) {
+      console.error('Error creating quiz:', err);
       setError(err instanceof Error ? err.message : 'Eroare la procesarea datelor.');
     }
   };
