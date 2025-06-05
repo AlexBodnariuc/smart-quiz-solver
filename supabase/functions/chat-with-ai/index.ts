@@ -27,57 +27,89 @@ serve(async (req) => {
 
     console.log('API key found, making request to Respell API...');
 
-    // Make request to the specific AI model
-    const requestBody = {
-      spellId: aiId,
-      inputs: {
-        message: message
-      }
-    };
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    console.log('Request body:', JSON.stringify(requestBody, null, 2));
+    try {
+      // Make request to the specific AI model with timeout
+      const requestBody = {
+        spellId: aiId,
+        inputs: {
+          message: message
+        }
+      };
 
-    const response = await fetch('https://api.respell.ai/v1/run', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${respellApiKey}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'Supabase-Edge-Function'
-      },
-      body: JSON.stringify(requestBody),
-    });
+      console.log('Request body:', JSON.stringify(requestBody, null, 2));
 
-    console.log('Respell API response status:', response.status);
-    console.log('Respell API response headers:', Object.fromEntries(response.headers.entries()));
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Respell API Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText
+      const response = await fetch('https://api.respell.ai/v1/run', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${respellApiKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Supabase-Edge-Function/1.0'
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
       });
-      throw new Error(`Respell API request failed: ${response.status} - ${errorText}`);
+
+      clearTimeout(timeoutId);
+
+      console.log('Respell API response status:', response.status);
+      console.log('Respell API response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Respell API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        
+        // Return a more user-friendly error for different status codes
+        if (response.status === 401) {
+          throw new Error('Cheie API Respell invalidă. Verificați configurația.');
+        } else if (response.status === 429) {
+          throw new Error('Prea multe cereri. Încercați din nou într-un minut.');
+        } else if (response.status >= 500) {
+          throw new Error('Serviciul Respell nu este disponibil momentan.');
+        } else {
+          throw new Error(`Eroare API Respell: ${response.status}`);
+        }
+      }
+
+      const data = await response.json();
+      console.log('Respell API Response:', JSON.stringify(data, null, 2));
+
+      // Extract the response from the AI
+      const aiResponse = data.outputs?.response || data.outputs?.message || data.response || 'Ne pare rău, nu am putut genera un răspuns.';
+
+      console.log('Extracted AI response:', aiResponse);
+
+      return new Response(JSON.stringify({ response: aiResponse }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error('Request timed out');
+        throw new Error('Cererea a expirat. Încercați din nou.');
+      }
+      
+      console.error('Network error:', fetchError);
+      throw new Error('Nu s-a putut conecta la serviciul AI. Verificați conexiunea la internet.');
     }
 
-    const data = await response.json();
-    console.log('Respell API Response:', JSON.stringify(data, null, 2));
-
-    // Extract the response from the AI
-    const aiResponse = data.outputs?.response || data.outputs?.message || data.response || 'Ne pare rău, nu am putut genera un răspuns.';
-
-    console.log('Extracted AI response:', aiResponse);
-
-    return new Response(JSON.stringify({ response: aiResponse }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
   } catch (error) {
     console.error('Error in chat-with-ai function:', error);
     console.error('Error stack:', error.stack);
     
     return new Response(JSON.stringify({ 
-      error: 'Ne pare rău, a apărut o eroare în comunicarea cu AI-ul.',
-      details: error.message 
+      error: error.message || 'Ne pare rău, a apărut o eroare în comunicarea cu AI-ul.',
+      details: error.name || 'UnknownError'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
