@@ -86,27 +86,51 @@ export const Quiz = ({ quizData, sessionId, onComplete }: QuizProps) => {
   };
 
   const handleComplete = async () => {
-    // Complete the quiz
+    const correctAnswers = answers.filter(a => a.isCorrect).length;
+    const totalQuestions = validQuestions.length;
+    const score = totalQuestions > 0 ? (correctAnswers / totalQuestions) * 100 : 0;
+    
+    console.log('Quiz completed:', {
+      correctAnswers,
+      totalQuestions,
+      score,
+      sessionId
+    });
+
+    // Complete the quiz in database
     if (sessionId) {
-      const correctAnswers = answers.filter(a => a.isCorrect).length;
-      const score = (correctAnswers / validQuestions.length) * 100;
-      
       try {
         await completeQuizSession(sessionId, answers, score);
-        
-        // Award XP and check for achievements
-        const baseXP = correctAnswers * 10; // 10 XP per correct answer
-        const bonusXP = score === 100 ? 50 : 0; // Perfect score bonus
-        const totalXP = baseXP + bonusXP;
-        
-        const achievements = await addXP(totalXP, score);
-        if (achievements.length > 0) {
-          setNewAchievements(achievements);
-        }
       } catch (error) {
         console.error('Error completing quiz session:', error);
       }
     }
+    
+    // Calculate and award XP
+    const baseXP = correctAnswers * 10; // 10 XP per correct answer
+    const bonusXP = score === 100 ? 50 : 0; // Perfect score bonus
+    const streakBonus = score >= 80 ? 20 : 0; // High score bonus
+    const totalXP = baseXP + bonusXP + streakBonus;
+    
+    console.log('Awarding XP:', {
+      baseXP,
+      bonusXP,
+      streakBonus,
+      totalXP,
+      score
+    });
+    
+    try {
+      const achievements = await addXP(totalXP, score);
+      console.log('New achievements earned:', achievements);
+      
+      if (achievements.length > 0) {
+        setNewAchievements(achievements);
+      }
+    } catch (error) {
+      console.error('Error awarding XP and checking achievements:', error);
+    }
+
     setShowResults(true);
   };
 

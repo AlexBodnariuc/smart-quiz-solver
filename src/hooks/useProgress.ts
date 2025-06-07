@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmailAuth } from '@/components/auth/EmailAuthProvider';
@@ -83,6 +82,92 @@ export const useProgress = () => {
     return getXpForLevel(currentLevel + 1);
   };
 
+  const trackDailyLogin = async (emailSessionId: string): Promise<number> => {
+    const today = new Date().toISOString().split('T')[0];
+    
+    console.log('Tracking daily login for:', emailSessionId, 'Date:', today);
+
+    // Get current progress
+    const { data: currentProgress, error: progressError } = await supabase
+      .from('user_progress')
+      .select('*')
+      .eq('email_session_id', emailSessionId)
+      .single();
+
+    if (progressError) {
+      console.error('Error getting current progress for login tracking:', progressError);
+      return 0;
+    }
+
+    // Check if user already logged in today
+    if (currentProgress.last_activity_date === today) {
+      console.log('User already logged in today, no additional XP');
+      return 0;
+    }
+
+    // Calculate new streak and XP
+    let newStreak = currentProgress.current_streak;
+    let newLongestStreak = currentProgress.longest_streak;
+    let dailyLoginXP = 10; // Base daily login XP
+
+    if (currentProgress.last_activity_date) {
+      const lastActivity = new Date(currentProgress.last_activity_date);
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      if (lastActivity.toISOString().split('T')[0] === yesterday.toISOString().split('T')[0]) {
+        // Consecutive day - increment streak
+        newStreak += 1;
+        newLongestStreak = Math.max(newLongestStreak, newStreak);
+        // Bonus XP for maintaining streak
+        dailyLoginXP += Math.min(newStreak * 2, 50); // Up to 50 bonus XP
+      } else {
+        // Streak broken - reset to 1
+        newStreak = 1;
+      }
+    } else {
+      // First activity - start streak
+      newStreak = 1;
+      newLongestStreak = Math.max(newLongestStreak, 1);
+    }
+
+    const newXP = currentProgress.total_xp + dailyLoginXP;
+    const newLevel = calculateLevel(newXP);
+
+    // Update progress
+    const { error: updateError } = await supabase
+      .from('user_progress')
+      .update({
+        total_xp: newXP,
+        current_level: newLevel,
+        current_streak: newStreak,
+        longest_streak: newLongestStreak,
+        last_activity_date: today,
+        updated_at: new Date().toISOString()
+      })
+      .eq('email_session_id', emailSessionId);
+
+    if (updateError) {
+      console.error('Error updating progress for daily login:', updateError);
+      return 0;
+    }
+
+    console.log(`Daily login tracked: +${dailyLoginXP} XP, Streak: ${newStreak}, Total XP: ${newXP}`);
+
+    // Update local state
+    setProgress(prev => prev ? {
+      ...prev,
+      total_xp: newXP,
+      current_level: newLevel,
+      current_streak: newStreak,
+      longest_streak: newLongestStreak,
+      last_activity_date: today,
+      updated_at: new Date().toISOString()
+    } : null);
+
+    return dailyLoginXP;
+  };
+
   const loadProgress = async () => {
     if (!session) {
       console.log('No session, clearing progress data');
@@ -136,9 +221,15 @@ export const useProgress = () => {
         if (createError) throw createError;
         console.log('Created new progress:', newProgress);
         setProgress(newProgress);
+        
+        // Track daily login for new user
+        await trackDailyLogin(emailSessionId);
       } else {
         console.log('Loaded existing progress:', progressData);
         setProgress(progressData);
+        
+        // Track daily login
+        await trackDailyLogin(emailSessionId);
       }
 
       // Load all achievements
@@ -190,7 +281,7 @@ export const useProgress = () => {
     const newLevel = calculateLevel(newXP);
     const today = new Date().toISOString().split('T')[0];
     
-    // Calculate streak
+    // Calculate streak (quiz completion can also maintain streak)
     let newStreak = progress.current_streak;
     let newLongestStreak = progress.longest_streak;
 
@@ -200,7 +291,7 @@ export const useProgress = () => {
       yesterday.setDate(yesterday.getDate() - 1);
       
       if (progress.last_activity_date === today) {
-        // Same day - no streak change
+        // Same day - no streak change but activity tracked
       } else if (lastActivity.toISOString().split('T')[0] === yesterday.toISOString().split('T')[0]) {
         // Consecutive day - increment streak
         newStreak += 1;
