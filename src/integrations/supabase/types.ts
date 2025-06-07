@@ -148,24 +148,33 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
+          bio: string | null
           created_at: string
           email: string | null
           full_name: string | null
           id: string
+          timezone: string | null
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
+          bio?: string | null
           created_at?: string
           email?: string | null
           full_name?: string | null
           id: string
+          timezone?: string | null
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
+          bio?: string | null
           created_at?: string
           email?: string | null
           full_name?: string | null
           id?: string
+          timezone?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -374,6 +383,97 @@ export type Database = {
           },
         ]
       }
+      user_knowledge_areas: {
+        Row: {
+          created_at: string
+          id: string
+          interest_level: number | null
+          proficiency_level: number | null
+          subject: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interest_level?: number | null
+          proficiency_level?: number | null
+          subject: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interest_level?: number | null
+          proficiency_level?: number | null
+          subject?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_knowledge_areas_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_preferences: {
+        Row: {
+          created_at: string
+          daily_goal: number | null
+          difficulty_preference: string | null
+          id: string
+          language_preference: string | null
+          learning_style: string | null
+          notifications_enabled: boolean | null
+          reminder_enabled: boolean | null
+          reminder_time: string | null
+          theme_preference: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_goal?: number | null
+          difficulty_preference?: string | null
+          id?: string
+          language_preference?: string | null
+          learning_style?: string | null
+          notifications_enabled?: boolean | null
+          reminder_enabled?: boolean | null
+          reminder_time?: string | null
+          theme_preference?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_goal?: number | null
+          difficulty_preference?: string | null
+          id?: string
+          language_preference?: string | null
+          learning_style?: string | null
+          notifications_enabled?: boolean | null
+          reminder_enabled?: boolean | null
+          reminder_time?: string | null
+          theme_preference?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_progress: {
         Row: {
           created_at: string
@@ -414,6 +514,53 @@ export type Database = {
             columns: ["email_session_id"]
             isOneToOne: true
             referencedRelation: "email_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_recommendations: {
+        Row: {
+          created_at: string
+          description: string | null
+          expires_at: string | null
+          id: string
+          is_dismissed: boolean | null
+          metadata: Json | null
+          priority: number | null
+          recommendation_type: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          is_dismissed?: boolean | null
+          metadata?: Json | null
+          priority?: number | null
+          recommendation_type: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          is_dismissed?: boolean | null
+          metadata?: Json | null
+          priority?: number | null
+          recommendation_type?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_recommendations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
