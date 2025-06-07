@@ -84,6 +84,12 @@ export default function Index() {
     }
   };
 
+  const handleQuizLoad = (quizData: QuizData, sessionId?: string) => {
+    console.log('Quiz loaded:', quizData.title);
+    setCurrentQuiz(quizData);
+    setSessionId(sessionId || null);
+  };
+
   const handleQuizComplete = (achievements: UserAchievement[] = []) => {
     setCurrentQuiz(null);
     setSessionId(null);
@@ -106,6 +112,10 @@ export default function Index() {
     // Load the full quiz data here - this would need to be implemented
     // For now, we'll show a message that this needs to be implemented
     alert('Quiz loading functionality needs to be implemented');
+  };
+
+  const handleShowProfile = () => {
+    navigate('/profile');
   };
 
   if (currentQuiz) {
@@ -192,7 +202,7 @@ export default function Index() {
               </p>
             </div>
             
-            <QuizLoader />
+            <QuizLoader onQuizLoad={handleQuizLoad} onShowProfile={handleShowProfile} />
           </div>
 
           {/* Available Quizzes */}
