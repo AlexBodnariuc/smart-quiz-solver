@@ -1,12 +1,11 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { QuizLoader } from '@/components/QuizLoader';
 import { Quiz } from '@/components/Quiz';
 import { useQuizStorage } from '@/hooks/useQuizStorage';
 import { useEmailAuth } from '@/components/auth/EmailAuthProvider';
 import { Button } from '@/components/ui/button';
-import { User, Plus, Trophy } from 'lucide-react';
+import { User, Trophy, PlayCircle, CheckCircle, Clock } from 'lucide-react';
 
 export interface Question {
   id: string;
@@ -38,7 +37,7 @@ export default function Index() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { session } = useEmailAuth();
-  const { getUserQuizSessions } = useQuizStorage();
+  const { getUserQuizSessions, loadQuizSession } = useQuizStorage();
 
   useEffect(() => {
     loadAvailableQuizzes();
@@ -57,12 +56,6 @@ export default function Index() {
     }
   };
 
-  const handleQuizLoad = (quizData: QuizData, sessionId?: string) => {
-    console.log('Quiz loaded:', quizData.title);
-    setCurrentQuiz(quizData);
-    setSessionId(sessionId || null);
-  };
-
   const handleQuizComplete = () => {
     setCurrentQuiz(null);
     setSessionId(null);
@@ -71,14 +64,39 @@ export default function Index() {
 
   const startQuiz = async (quiz: QuizSession) => {
     console.log('Starting quiz:', quiz.title);
-    // Load the full quiz data here - this would need to be implemented
-    // For now, we'll show a message that this needs to be implemented
-    alert('Quiz loading functionality needs to be implemented');
+    setLoading(true);
+    try {
+      const quizData = await loadQuizSession(quiz.id);
+      if (quizData) {
+        setCurrentQuiz(quizData);
+        setSessionId(quiz.id);
+      }
+    } catch (error) {
+      console.error('Error loading session:', error);
+      alert('Eroare la încărcarea quiz-ului');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleShowProfile = () => {
-    navigate('/profile');
+  const getSessionIcon = (quiz: QuizSession) => {
+    if (quiz.is_completed) {
+      return <CheckCircle className="h-5 w-5 text-green-400" />;
+    }
+    return <PlayCircle className="h-5 w-5 text-blue-400" />;
   };
+
+  const getSessionStatus = (quiz: QuizSession) => {
+    if (quiz.is_completed) {
+      return `Finalizat - ${quiz.score ? Math.round(quiz.score) + '%' : 'N/A'}`;
+    }
+    return 'Disponibil';
+  };
+
+  // Filter to show only the first 6 generated subject quizzes
+  const subjectQuizzes = availableQuizzes
+    .filter(session => session.title.startsWith('Subiect'))
+    .slice(0, 6);
 
   if (currentQuiz) {
     return (
@@ -125,85 +143,128 @@ export default function Index() {
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Quiz Creator */}
-          <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
-            <div className="text-center mb-6">
-              <div className="bg-gradient-to-r from-cyan-500 to-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Plus className="h-8 w-8 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Creează Quiz Nou</h2>
+        {/* Generated Subject Quizzes */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 mb-8">
+          <div className="text-center mb-6">
+            <div className="bg-gradient-to-r from-purple-500 to-pink-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Trophy className="h-8 w-8 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Teste de Admitere</h2>
+            <p className="text-blue-200">
+              6 teste complete pentru pregătirea admiterii la medicină
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
+              <p className="text-blue-200 mt-4">Se încarcă testele...</p>
+            </div>
+          ) : subjectQuizzes.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {subjectQuizzes.map((quiz) => (
+                <div
+                  key={quiz.id}
+                  className="bg-white/5 rounded-xl p-6 border border-white/10 hover:bg-white/10 transition-all duration-300 cursor-pointer transform hover:scale-[1.02]"
+                  onClick={() => startQuiz(quiz)}
+                >
+                  <div className="text-center">
+                    <div className="flex justify-center mb-4">
+                      {getSessionIcon(quiz)}
+                    </div>
+                    <h4 className="text-white font-bold text-xl mb-2">{quiz.title}</h4>
+                    <p className="text-purple-200 text-lg font-medium mb-2">
+                      50 întrebări
+                    </p>
+                    <p className="text-blue-200 text-sm mb-4">
+                      {getSessionStatus(quiz)}
+                    </p>
+                    <Button
+                      size="sm"
+                      className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+                    >
+                      {quiz.is_completed ? 'Reîncercare' : 'Începe Testul'}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
               <p className="text-blue-200">
-                Generează quiz-uri personalizate din fișierele tale PDF
+                {session 
+                  ? 'Nu există teste generate încă. Contactează administratorul pentru a genera testele.' 
+                  : 'Conectează-te pentru a accesa testele de admitere.'}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* About Platform Section */}
+        <div className="bg-white/5 backdrop-blur-lg rounded-3xl p-8 border border-white/10">
+          <h3 className="text-2xl font-bold text-white mb-6 text-center">
+            De ce să alegi Quiz Academy?
+          </h3>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="text-center">
+              <div className="bg-gradient-to-r from-blue-500 to-cyan-600 w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Trophy className="h-6 w-6 text-white" />
+              </div>
+              <h4 className="text-white font-semibold mb-2">Teste Complete</h4>
+              <p className="text-blue-200 text-sm">
+                6 teste cu câte 50 de întrebări fiecare, special create pentru admiterea la medicină
               </p>
             </div>
             
-            <QuizLoader onQuizLoad={handleQuizLoad} onShowProfile={handleShowProfile} />
-          </div>
-
-          {/* Available Quizzes */}
-          <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
-            <div className="text-center mb-6">
-              <div className="bg-gradient-to-r from-purple-500 to-pink-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Trophy className="h-8 w-8 text-white" />
+            <div className="text-center">
+              <div className="bg-gradient-to-r from-green-500 to-emerald-600 w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="h-6 w-6 text-white" />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Quiz-uri Disponibile</h2>
-              <p className="text-blue-200">
-                Continuă quiz-urile în curs sau începe unele noi
+              <h4 className="text-white font-semibold mb-2">Explicații Detaliate</h4>
+              <p className="text-blue-200 text-sm">
+                Fiecare întrebare vine cu explicații complete și referințe din manualele de specialitate
               </p>
             </div>
-
-            {loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
-                <p className="text-blue-200 mt-4">Se încarcă quiz-urile...</p>
+            
+            <div className="text-center">
+              <div className="bg-gradient-to-r from-purple-500 to-pink-600 w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Clock className="h-6 w-6 text-white" />
               </div>
-            ) : availableQuizzes.length > 0 ? (
-              <div className="space-y-4 max-h-80 overflow-y-auto">
-                {availableQuizzes.map((quiz) => (
-                  <div
-                    key={quiz.id}
-                    className="bg-white/5 rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-all duration-300"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-white font-semibold">{quiz.title}</h3>
-                        <div className="flex items-center gap-4 mt-2 text-sm">
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            quiz.is_completed 
-                              ? 'bg-green-500/20 text-green-300' 
-                              : 'bg-yellow-500/20 text-yellow-300'
-                          }`}>
-                            {quiz.is_completed ? 'Completat' : 'În progres'}
-                          </span>
-                          {quiz.score && (
-                            <span className="text-blue-200">
-                              Scor: {quiz.score.toFixed(0)}%
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        onClick={() => startQuiz(quiz)}
-                        size="sm"
-                        className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
-                      >
-                        {quiz.is_completed ? 'Reîncercare' : 'Continuă'}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+              <h4 className="text-white font-semibold mb-2">Progres Salvat</h4>
+              <p className="text-blue-200 text-sm">
+                Progresul tău este salvat automat și poți accesa testele de pe orice dispozitiv
+              </p>
+            </div>
+            
+            <div className="text-center">
+              <div className="bg-gradient-to-r from-orange-500 to-red-600 w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <User className="h-6 w-6 text-white" />
               </div>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-blue-200">
-                  {session 
-                    ? 'Nu ai încă niciun quiz. Creează primul tău quiz mai sus!' 
-                    : 'Conectează-te pentru a vedea quiz-urile tale salvate.'}
-                </p>
+              <h4 className="text-white font-semibold mb-2">Simulare Reală</h4>
+              <p className="text-blue-200 text-sm">
+                Testele simulează condițiile reale de examen pentru o pregătire optimă
+              </p>
+            </div>
+            
+            <div className="text-center">
+              <div className="bg-gradient-to-r from-cyan-500 to-blue-600 w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Trophy className="h-6 w-6 text-white" />
               </div>
-            )}
+              <h4 className="text-white font-semibold mb-2">Evaluare Precisă</h4>
+              <p className="text-blue-200 text-sm">
+                Sistem de scoring precis care îți arată punctele forte și cele ce necesită îmbunătățire
+              </p>
+            </div>
+            
+            <div className="text-center">
+              <div className="bg-gradient-to-r from-indigo-500 to-purple-600 w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="h-6 w-6 text-white" />
+              </div>
+              <h4 className="text-white font-semibold mb-2">Acces Nelimitat</h4>
+              <p className="text-blue-200 text-sm">
+                Poți relua testele oricând pentru a-ți consolida cunoștințele și a obține scoruri mai bune
+              </p>
+            </div>
           </div>
         </div>
 
@@ -212,10 +273,10 @@ export default function Index() {
           <div className="mt-8 text-center">
             <div className="bg-gradient-to-r from-cyan-500/20 to-blue-600/20 rounded-3xl p-8 border border-cyan-400/30">
               <h3 className="text-2xl font-bold text-white mb-4">
-                Conectează-te pentru a-ți salva progresul!
+                Începe pregătirea pentru admiterea la medicină!
               </h3>
               <p className="text-blue-200 mb-6">
-                Creează și salvează quiz-uri personalizate din documentele tale.
+                Conectează-te pentru a accesa testele complete și a-ți urmări progresul.
               </p>
               <Button
                 onClick={() => navigate('/auth')}
