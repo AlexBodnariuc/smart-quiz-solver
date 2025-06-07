@@ -415,7 +415,7 @@ export const useQuizStorage = () => {
     }
   };
 
-  // Function to complete a quiz session
+  // Function to complete a quiz session with XP calculation
   const completeQuizSession = async (
     sessionId: string, 
     answers: Answer[], 
@@ -425,11 +425,19 @@ export const useQuizStorage = () => {
     setError(null);
 
     try {
+      // Calculate XP based on score and number of questions
+      const correctAnswers = answers.filter(a => a.isCorrect).length;
+      const totalQuestions = answers.length;
+      const baseXP = correctAnswers * 10; // 10 XP per correct answer
+      const bonusXP = score === 100 ? 50 : 0; // Perfect score bonus
+      const totalXP = baseXP + bonusXP;
+
       const { error: sessionError } = await supabase
         .from('quiz_sessions')
         .update({
           is_completed: true,
           score,
+          xp_earned: totalXP,
           updated_at: new Date().toISOString()
         })
         .eq('id', sessionId);

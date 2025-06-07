@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Brain, Plus, PlayCircle, Clock, CheckCircle, Upload, Shuffle, RefreshCw, Trash2 } from 'lucide-react';
 import { QuizData, Question } from '@/pages/Index';
@@ -7,6 +6,7 @@ import { useQuizStorage } from '@/hooks/useQuizStorage';
 
 interface QuizLoaderProps {
   onQuizLoad: (data: QuizData, sessionId?: string) => void;
+  onShowProfile: () => void;
 }
 
 interface QuizSession {
@@ -20,7 +20,7 @@ interface QuizSession {
   updated_at: string;
 }
 
-export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
+export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [sessions, setSessions] = useState<QuizSession[]>([]);
   const [showCreateOptions, setShowCreateOptions] = useState(false);

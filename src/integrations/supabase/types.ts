@@ -9,6 +9,39 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          condition_type: string
+          condition_value: number
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          name: string
+          xp_reward: number
+        }
+        Insert: {
+          condition_type: string
+          condition_value: number
+          created_at?: string
+          description: string
+          icon: string
+          id?: string
+          name: string
+          xp_reward?: number
+        }
+        Update: {
+          condition_type?: string
+          condition_value?: number
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          name?: string
+          xp_reward?: number
+        }
+        Relationships: []
+      }
       email_sessions: {
         Row: {
           created_at: string
@@ -267,6 +300,7 @@ export type Database = {
           total_questions: number
           updated_at: string
           user_id: string | null
+          xp_earned: number | null
         }
         Insert: {
           created_at?: string
@@ -279,6 +313,7 @@ export type Database = {
           total_questions?: number
           updated_at?: string
           user_id?: string | null
+          xp_earned?: number | null
         }
         Update: {
           created_at?: string
@@ -291,12 +326,93 @@ export type Database = {
           total_questions?: number
           updated_at?: string
           user_id?: string | null
+          xp_earned?: number | null
         }
         Relationships: [
           {
             foreignKeyName: "quiz_sessions_email_session_id_fkey"
             columns: ["email_session_id"]
             isOneToOne: false
+            referencedRelation: "email_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_achievements: {
+        Row: {
+          achievement_id: string | null
+          earned_at: string
+          email_session_id: string | null
+          id: string
+        }
+        Insert: {
+          achievement_id?: string | null
+          earned_at?: string
+          email_session_id?: string | null
+          id?: string
+        }
+        Update: {
+          achievement_id?: string | null
+          earned_at?: string
+          email_session_id?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_achievements_achievement_id_fkey"
+            columns: ["achievement_id"]
+            isOneToOne: false
+            referencedRelation: "achievements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_achievements_email_session_id_fkey"
+            columns: ["email_session_id"]
+            isOneToOne: false
+            referencedRelation: "email_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_progress: {
+        Row: {
+          created_at: string
+          current_level: number
+          current_streak: number
+          email_session_id: string | null
+          id: string
+          last_activity_date: string | null
+          longest_streak: number
+          total_xp: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_level?: number
+          current_streak?: number
+          email_session_id?: string | null
+          id?: string
+          last_activity_date?: string | null
+          longest_streak?: number
+          total_xp?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_level?: number
+          current_streak?: number
+          email_session_id?: string | null
+          id?: string
+          last_activity_date?: string | null
+          longest_streak?: number
+          total_xp?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_progress_email_session_id_fkey"
+            columns: ["email_session_id"]
+            isOneToOne: true
             referencedRelation: "email_sessions"
             referencedColumns: ["id"]
           },

@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { QuizLoader } from '@/components/QuizLoader';
 import { Quiz } from '@/components/Quiz';
+import { Profile } from './Profile';
 
 export interface QuizData {
   id: string;
@@ -18,10 +19,12 @@ export interface Question {
   explanation: string;
 }
 
+type AppState = 'loader' | 'preview' | 'quiz' | 'profile';
+
 const Index = () => {
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>(undefined);
-  const [isQuizStarted, setIsQuizStarted] = useState(false);
+  const [appState, setAppState] = useState<AppState>('loader');
 
   const handleQuizLoad = (data: QuizData, sessionId?: string) => {
     console.log('Quiz loaded successfully:', data);
@@ -29,7 +32,7 @@ const Index = () => {
     console.log('Number of questions:', data.questions.length);
     setQuizData(data);
     setCurrentSessionId(sessionId);
-    setIsQuizStarted(false);
+    setAppState('preview');
   };
 
   const handleStartQuiz = () => {
@@ -39,12 +42,12 @@ const Index = () => {
       console.error('No quiz data available to start');
       return;
     }
-    setIsQuizStarted(true);
+    setAppState('quiz');
   };
 
   const handleQuizComplete = () => {
     console.log('Quiz completed');
-    setIsQuizStarted(false);
+    setAppState('loader');
     setQuizData(null);
     setCurrentSessionId(undefined);
   };
@@ -53,14 +56,28 @@ const Index = () => {
     console.log('Loading new quiz');
     setQuizData(null);
     setCurrentSessionId(undefined);
-    setIsQuizStarted(false);
+    setAppState('loader');
+  };
+
+  const handleShowProfile = () => {
+    setAppState('profile');
+  };
+
+  const handleBackFromProfile = () => {
+    if (quizData) {
+      setAppState('preview');
+    } else {
+      setAppState('loader');
+    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
-      {!quizData ? (
-        <QuizLoader onQuizLoad={handleQuizLoad} />
-      ) : !isQuizStarted ? (
+      {appState === 'loader' && (
+        <QuizLoader onQuizLoad={handleQuizLoad} onShowProfile={handleShowProfile} />
+      )}
+      
+      {appState === 'preview' && quizData && (
         <div className="min-h-screen flex items-center justify-center p-6">
           <div className="max-w-2xl w-full text-center">
             <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
@@ -90,8 +107,14 @@ const Index = () => {
             </div>
           </div>
         </div>
-      ) : (
+      )}
+      
+      {appState === 'quiz' && quizData && (
         <Quiz quizData={quizData} sessionId={currentSessionId} onComplete={handleQuizComplete} />
+      )}
+      
+      {appState === 'profile' && (
+        <Profile onBack={handleBackFromProfile} />
       )}
     </div>
   );
