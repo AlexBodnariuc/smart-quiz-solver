@@ -12,26 +12,58 @@ interface QuizSession {
   score?: number;
   created_at: string;
   updated_at: string;
+  email_session_id?: string;
 }
 
 export const useQuizStorage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const getCurrentEmailSessionId = (): string | null => {
+    const token = localStorage.getItem('email_session_token');
+    return token;
+  };
+
+  const getEmailSessionByToken = async (token: string) => {
+    const { data, error } = await supabase
+      .from('email_sessions')
+      .select('id')
+      .eq('session_token', token)
+      .eq('is_active', true)
+      .single();
+
+    if (error) {
+      console.error('Error getting email session:', error);
+      return null;
+    }
+    return data;
+  };
+
   const saveQuizSession = async (quizData: QuizData): Promise<string> => {
     setLoading(true);
     setError(null);
 
     try {
-      // Create quiz session without user_id requirement
-      const { data: sessionData, error: sessionError } = await supabase
+      const sessionToken = getCurrentEmailSessionId();
+      let emailSessionId = null;
+
+      if (sessionToken) {
+        const emailSession = await getEmailSessionByToken(sessionToken);
+        emailSessionId = emailSession?.id || null;
+      }
+
+      // Create quiz session with optional email_session_id
+      const sessionData = {
+        title: quizData.title,
+        total_questions: quizData.questions.length,
+        current_question_index: 0,
+        is_completed: false,
+        ...(emailSessionId && { email_session_id: emailSessionId })
+      };
+
+      const { data: sessionDataResult, error: sessionError } = await supabase
         .from('quiz_sessions')
-        .insert({
-          title: quizData.title,
-          total_questions: quizData.questions.length,
-          current_question_index: 0,
-          is_completed: false
-        })
+        .insert(sessionData)
         .select()
         .single();
 
@@ -39,7 +71,7 @@ export const useQuizStorage = () => {
 
       // Save all questions for this session
       const questionsToInsert = quizData.questions.map((question, index) => ({
-        quiz_session_id: sessionData.id,
+        quiz_session_id: sessionDataResult.id,
         question_id: question.id,
         question_text: question.text,
         variants: question.variants,
@@ -55,7 +87,7 @@ export const useQuizStorage = () => {
 
       if (questionsError) throw questionsError;
 
-      return sessionData.id;
+      return sessionDataResult.id;
     } catch (err: any) {
       console.error('Error saving quiz session:', err);
       setError(err.message);
@@ -117,9 +149,32 @@ export const useQuizStorage = () => {
     setError(null);
 
     try {
+      const sessionToken = getCurrentEmailSessionId();
+      
+      if (!sessionToken) {
+        // If no session token, return all public sessions
+        const { data, error } = await supabase
+          .from('quiz_sessions')
+          .select('*')
+          .is('email_session_id', null)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+      }
+
+      // Get email session for current user
+      const emailSession = await getEmailSessionByToken(sessionToken);
+      
+      if (!emailSession) {
+        return [];
+      }
+
+      // Get sessions for this email session + public sessions
       const { data, error } = await supabase
         .from('quiz_sessions')
         .select('*')
+        .or(`email_session_id.eq.${emailSession.id},email_session_id.is.null`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -142,7 +197,6 @@ export const useQuizStorage = () => {
     try {
       console.log('Loading ALL questions from the entire database...');
       
-      // Get ALL questions from ALL quiz sessions (not just uploaded ones)
       const { data: questionsData, error: questionsError } = await supabase
         .from('quiz_session_questions')
         .select(`
@@ -158,7 +212,6 @@ export const useQuizStorage = () => {
         return [];
       }
 
-      // Convert to Question format
       const allQuestions: Question[] = questionsData.map(q => ({
         id: q.question_id,
         text: q.question_text,
@@ -168,7 +221,6 @@ export const useQuizStorage = () => {
         passage: q.passage ? JSON.stringify(q.passage) : undefined
       }));
 
-      // Enhanced deduplication: Remove duplicates based on question text and variants
       const uniqueQuestions = allQuestions.filter((question, index, self) => {
         const firstIndex = self.findIndex(q => {
           const normalizedText1 = q.text.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -212,7 +264,6 @@ export const useQuizStorage = () => {
     try {
       console.log('Deleting existing subject quizzes...');
       
-      // Get all subject quiz sessions
       const { data: subjectSessions, error: fetchError } = await supabase
         .from('quiz_sessions')
         .select('id')
@@ -223,7 +274,6 @@ export const useQuizStorage = () => {
       if (subjectSessions && subjectSessions.length > 0) {
         const sessionIds = subjectSessions.map(s => s.id);
 
-        // Delete questions first (due to foreign key constraints)
         const { error: questionsDeleteError } = await supabase
           .from('quiz_session_questions')
           .delete()
@@ -231,7 +281,6 @@ export const useQuizStorage = () => {
 
         if (questionsDeleteError) throw questionsDeleteError;
 
-        // Delete answers
         const { error: answersDeleteError } = await supabase
           .from('quiz_answers')
           .delete()
@@ -239,7 +288,6 @@ export const useQuizStorage = () => {
 
         if (answersDeleteError) throw answersDeleteError;
 
-        // Delete sessions
         const { error: sessionsDeleteError } = await supabase
           .from('quiz_sessions')
           .delete()
@@ -263,7 +311,6 @@ export const useQuizStorage = () => {
     try {
       console.log('Starting database deduplication process...');
       
-      // Get all questions with their sessions
       const { data: allQuestions, error: fetchError } = await supabase
         .from('quiz_session_questions')
         .select('*')
@@ -278,7 +325,6 @@ export const useQuizStorage = () => {
 
       console.log(`Found ${allQuestions.length} total questions, starting deduplication...`);
 
-      // Track unique questions and duplicates
       const uniqueQuestions = new Map();
       const duplicateIds = [];
 
@@ -288,10 +334,8 @@ export const useQuizStorage = () => {
         const uniqueKey = `${normalizedText}|||${variantsKey}`;
 
         if (uniqueQuestions.has(uniqueKey)) {
-          // This is a duplicate
           duplicateIds.push(question.id);
         } else {
-          // This is unique, keep it
           uniqueQuestions.set(uniqueKey, question);
         }
       }
@@ -299,7 +343,6 @@ export const useQuizStorage = () => {
       console.log(`Found ${duplicateIds.length} duplicate questions to remove`);
 
       if (duplicateIds.length > 0) {
-        // Delete duplicate questions in batches
         const batchSize = 100;
         for (let i = 0; i < duplicateIds.length; i += batchSize) {
           const batch = duplicateIds.slice(i, i + batchSize);
@@ -339,7 +382,6 @@ export const useQuizStorage = () => {
     setError(null);
 
     try {
-      // Update session progress
       const { error: sessionError } = await supabase
         .from('quiz_sessions')
         .update({
@@ -350,7 +392,6 @@ export const useQuizStorage = () => {
 
       if (sessionError) throw sessionError;
 
-      // Save new answers
       for (const answer of answers) {
         const { error: answerError } = await supabase
           .from('quiz_answers')
@@ -384,7 +425,6 @@ export const useQuizStorage = () => {
     setError(null);
 
     try {
-      // Mark session as completed
       const { error: sessionError } = await supabase
         .from('quiz_sessions')
         .update({
@@ -396,7 +436,6 @@ export const useQuizStorage = () => {
 
       if (sessionError) throw sessionError;
 
-      // Save final answers
       await saveQuizProgress(sessionId, -1, answers);
     } catch (err: any) {
       console.error('Error completing quiz session:', err);

@@ -9,6 +9,33 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      email_sessions: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          last_active: string
+          session_token: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          last_active?: string
+          session_token?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          last_active?: string
+          session_token?: string
+        }
+        Relationships: []
+      }
       meter_reading_requests: {
         Row: {
           completed_at: string | null
@@ -232,6 +259,7 @@ export type Database = {
         Row: {
           created_at: string
           current_question_index: number
+          email_session_id: string | null
           id: string
           is_completed: boolean
           score: number | null
@@ -243,6 +271,7 @@ export type Database = {
         Insert: {
           created_at?: string
           current_question_index?: number
+          email_session_id?: string | null
           id?: string
           is_completed?: boolean
           score?: number | null
@@ -254,6 +283,7 @@ export type Database = {
         Update: {
           created_at?: string
           current_question_index?: number
+          email_session_id?: string | null
           id?: string
           is_completed?: boolean
           score?: number | null
@@ -262,7 +292,15 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "quiz_sessions_email_session_id_fkey"
+            columns: ["email_session_id"]
+            isOneToOne: false
+            referencedRelation: "email_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_conversations: {
         Row: {
