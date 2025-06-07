@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Question } from '@/pages/Index';
 import { CheckCircle, XCircle, Eye } from 'lucide-react';
-import { InlineAIChat } from './InlineAIChat';
+import { PassageDisplay } from './PassageDisplay';
 import { ProcessedChunk } from '@/utils/csvParser';
 
 interface QuestionCardProps {
@@ -58,6 +58,20 @@ export const QuestionCard = ({
     return null;
   };
 
+  // Parse passage data if available
+  const getPassageChunks = (): ProcessedChunk[] => {
+    if (!question.passage) return [];
+    
+    try {
+      const parsed = JSON.parse(question.passage);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const passageChunks = getPassageChunks();
+
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
       {/* Question Header */}
@@ -111,8 +125,10 @@ export const QuestionCard = ({
         </div>
       )}
 
-      {/* AI Chat Component - replaces both passage display and ask AI button */}
-      <InlineAIChat question={question} hasAnswered={hasAnswered} />
+      {/* Passage Display - restored */}
+      {hasAnswered && passageChunks.length > 0 && (
+        <PassageDisplay chunks={passageChunks} />
+      )}
 
       {/* Answer Feedback */}
       {hasAnswered && (

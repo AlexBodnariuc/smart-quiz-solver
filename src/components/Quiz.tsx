@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { QuizData, Question } from '@/pages/Index';
 import { QuestionCard } from './QuestionCard';
 import { QuizResults } from './QuizResults';
+import { InlineAIChat } from './InlineAIChat';
 import { ChevronLeft, ChevronRight, BookOpen, SkipForward } from 'lucide-react';
 import { ProcessedChunk } from '@/utils/csvParser';
 import { useQuizStorage } from '@/hooks/useQuizStorage';
@@ -250,6 +251,9 @@ export const Quiz = ({ quizData, sessionId, onComplete }: QuizProps) => {
                 </button>
               </div>
             </div>
+
+            {/* AI Chat Component - moved here from QuestionCard */}
+            <InlineAIChat question={currentQuestion} hasAnswered={hasAnswered} />
           </div>
 
           {/* Sidebar */}
