@@ -508,15 +508,7 @@ export type Database = {
           total_xp?: number
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_progress_email_session_id_fkey"
-            columns: ["email_session_id"]
-            isOneToOne: true
-            referencedRelation: "email_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       user_recommendations: {
         Row: {
