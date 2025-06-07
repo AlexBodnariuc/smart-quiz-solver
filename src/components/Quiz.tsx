@@ -4,7 +4,7 @@ import { QuizData, Question } from '@/pages/Index';
 import { QuestionCard } from './QuestionCard';
 import { QuizResults } from './QuizResults';
 import { InlineAIChat } from './InlineAIChat';
-import { ChevronLeft, ChevronRight, BookOpen, SkipForward } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward } from 'lucide-react';
 import { ProcessedChunk } from '@/utils/csvParser';
 import { useQuizStorage } from '@/hooks/useQuizStorage';
 
@@ -30,7 +30,6 @@ export const Quiz = ({ quizData, sessionId, onComplete }: QuizProps) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [showResults, setShowResults] = useState(false);
-  const [showPassage, setShowPassage] = useState(false);
   const { saveQuizProgress, completeQuizSession } = useQuizStorage();
 
   const currentQuestion = validQuestions[currentQuestionIndex];
@@ -79,7 +78,6 @@ export const Quiz = ({ quizData, sessionId, onComplete }: QuizProps) => {
       handleComplete();
     } else {
       setCurrentQuestionIndex(prev => prev + 1);
-      setShowPassage(false);
     }
   };
 
@@ -112,49 +110,17 @@ export const Quiz = ({ quizData, sessionId, onComplete }: QuizProps) => {
       await handleComplete();
     } else {
       setCurrentQuestionIndex(prev => prev + 1);
-      setShowPassage(false);
     }
   };
 
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
-      setShowPassage(false);
     }
   };
 
   const getSelectedAnswer = () => {
     return answers.find(a => a.questionId === currentQuestion.id)?.selectedAnswer;
-  };
-
-  // Parse passage data if available
-  const getPassageChunks = (): ProcessedChunk[] => {
-    if (!currentQuestion.passage) return [];
-    
-    try {
-      const parsed = JSON.parse(currentQuestion.passage);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const passageChunks = getPassageChunks();
-
-  const getRelevanceColor = (score?: number) => {
-    if (!score) return 'border-blue-400/30 bg-blue-900/20';
-    
-    if (score >= 0.8) return 'border-green-400/50 bg-green-900/20';
-    if (score >= 0.6) return 'border-yellow-400/50 bg-yellow-900/20';
-    return 'border-red-400/50 bg-red-900/20';
-  };
-
-  const getTextColor = (score?: number) => {
-    if (!score) return 'text-blue-100';
-    
-    if (score >= 0.8) return 'text-green-100';
-    if (score >= 0.6) return 'text-yellow-100';
-    return 'text-red-100';
   };
 
   // Show error if no valid questions
@@ -252,61 +218,12 @@ export const Quiz = ({ quizData, sessionId, onComplete }: QuizProps) => {
               </div>
             </div>
 
-            {/* AI Chat Component - moved here from QuestionCard */}
+            {/* AI Chat Component */}
             <InlineAIChat question={currentQuestion} hasAnswered={hasAnswered} />
           </div>
 
-          {/* Sidebar */}
+          {/* Sidebar - Only Question Overview */}
           <div className="space-y-6">
-            {/* Passage */}
-            {passageChunks.length > 0 && (
-              <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
-                <button
-                  onClick={() => setShowPassage(!showPassage)}
-                  className="flex items-center gap-2 text-white font-semibold mb-4 hover:text-cyan-300 transition-colors"
-                >
-                  <BookOpen className="h-5 w-5" />
-                  {showPassage ? 'Ascunde' : 'Afișează'} Pasajul
-                </button>
-                
-                {showPassage && (
-                  <div className="space-y-4">
-                    {passageChunks.slice(0, 2).map((chunk, index) => (
-                      <div
-                        key={index}
-                        className={`rounded-xl p-4 border ${getRelevanceColor(chunk.score)}`}
-                      >
-                        {/* Quote styling with proper quotation marks */}
-                        <div className="relative">
-                          <div className="text-2xl text-cyan-300/30 absolute -top-1 -left-1">"</div>
-                          <blockquote className={`${getTextColor(chunk.score)} leading-relaxed mb-3 italic pl-4 pr-3 text-sm`}>
-                            {chunk.text}
-                          </blockquote>
-                          <div className="text-2xl text-cyan-300/30 absolute -bottom-1 right-0">"</div>
-                        </div>
-                        
-                        {/* Book information */}
-                        <div className="text-xs text-gray-300 mt-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {chunk.bookTitle && (
-                              <span className="font-medium text-cyan-300 flex items-center gap-1">
-                                📚 {chunk.bookTitle}
-                              </span>
-                            )}
-                            {chunk.page && (
-                              <span className="text-blue-200 flex items-center gap-1">
-                                📄 Pagina {chunk.page}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Question Overview */}
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
               <h3 className="text-white font-semibold mb-4">Progres Quiz</h3>
