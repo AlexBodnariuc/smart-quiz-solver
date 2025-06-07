@@ -42,9 +42,16 @@ export const useProgress = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  console.log('useProgress - Session:', session);
+
   const getCurrentEmailSessionId = async (): Promise<string | null> => {
     const token = localStorage.getItem('email_session_token');
-    if (!token) return null;
+    if (!token) {
+      console.log('No email session token found');
+      return null;
+    }
+
+    console.log('Getting email session for token:', token);
 
     const { data, error } = await supabase
       .from('email_sessions')
@@ -57,6 +64,8 @@ export const useProgress = () => {
       console.error('Error getting email session:', error);
       return null;
     }
+    
+    console.log('Email session data:', data);
     return data?.id || null;
   };
 
@@ -75,7 +84,12 @@ export const useProgress = () => {
   };
 
   const loadProgress = async () => {
-    if (!session) return;
+    if (!session) {
+      console.log('No session, clearing progress data');
+      setProgress(null);
+      setUserAchievements([]);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -83,10 +97,14 @@ export const useProgress = () => {
     try {
       const emailSessionId = await getCurrentEmailSessionId();
       if (!emailSessionId) {
-        console.log('No email session found');
+        console.log('No email session found, cannot load progress');
+        setProgress(null);
+        setUserAchievements([]);
         setLoading(false);
         return;
       }
+
+      console.log('Loading progress for email session:', emailSessionId);
 
       // Load user progress
       const { data: progressData, error: progressError } = await supabase
@@ -100,6 +118,7 @@ export const useProgress = () => {
       }
 
       if (!progressData) {
+        console.log('Creating initial progress entry');
         // Create initial progress entry
         const { data: newProgress, error: createError } = await supabase
           .from('user_progress')
@@ -115,8 +134,10 @@ export const useProgress = () => {
           .single();
 
         if (createError) throw createError;
+        console.log('Created new progress:', newProgress);
         setProgress(newProgress);
       } else {
+        console.log('Loaded existing progress:', progressData);
         setProgress(progressData);
       }
 
@@ -127,6 +148,7 @@ export const useProgress = () => {
         .order('condition_value');
 
       if (achievementsError) throw achievementsError;
+      console.log('Loaded achievements:', achievementsData);
       setAchievements(achievementsData || []);
 
       // Load user achievements
@@ -139,6 +161,7 @@ export const useProgress = () => {
         .eq('email_session_id', emailSessionId);
 
       if (userAchievementsError) throw userAchievementsError;
+      console.log('Loaded user achievements:', userAchievementsData);
       setUserAchievements(userAchievementsData || []);
 
     } catch (err: any) {
@@ -150,10 +173,18 @@ export const useProgress = () => {
   };
 
   const addXP = async (xpAmount: number, quizScore?: number): Promise<UserAchievement[]> => {
-    if (!session || !progress) return [];
+    if (!session || !progress) {
+      console.log('Cannot add XP - no session or progress');
+      return [];
+    }
 
     const emailSessionId = await getCurrentEmailSessionId();
-    if (!emailSessionId) return [];
+    if (!emailSessionId) {
+      console.log('Cannot add XP - no email session');
+      return [];
+    }
+
+    console.log('Adding XP:', xpAmount, 'Current XP:', progress.total_xp);
 
     const newXP = progress.total_xp + xpAmount;
     const newLevel = calculateLevel(newXP);
@@ -202,6 +233,8 @@ export const useProgress = () => {
       return [];
     }
 
+    console.log('Updated progress - New XP:', newXP, 'New Level:', newLevel);
+
     // Update local state
     setProgress(prev => prev ? {
       ...prev,
@@ -229,6 +262,8 @@ export const useProgress = () => {
     const newAchievements: UserAchievement[] = [];
     const earnedAchievementIds = userAchievements.map(ua => ua.achievement_id);
 
+    console.log('Checking achievements for:', { totalXP, currentLevel, currentStreak, quizScore });
+
     // Get total completed quizzes
     const { data: completedQuizzes, error: quizError } = await supabase
       .from('quiz_sessions')
@@ -242,6 +277,7 @@ export const useProgress = () => {
     }
 
     const totalQuizzes = completedQuizzes?.length || 0;
+    console.log('Total completed quizzes:', totalQuizzes);
 
     for (const achievement of achievements) {
       if (earnedAchievementIds.includes(achievement.id)) continue;
@@ -263,6 +299,8 @@ export const useProgress = () => {
           break;
       }
 
+      console.log('Achievement check:', achievement.name, 'should award:', shouldAward);
+
       if (shouldAward) {
         const { data: newAchievement, error: achievementError } = await supabase
           .from('user_achievements')
@@ -277,6 +315,7 @@ export const useProgress = () => {
           .single();
 
         if (!achievementError && newAchievement) {
+          console.log('Awarded achievement:', newAchievement);
           newAchievements.push(newAchievement);
           
           // Award XP bonus for achievement
@@ -296,6 +335,8 @@ export const useProgress = () => {
               updated_at: new Date().toISOString()
             } : null);
           }
+        } else {
+          console.error('Error awarding achievement:', achievementError);
         }
       }
     }
@@ -308,8 +349,13 @@ export const useProgress = () => {
   };
 
   useEffect(() => {
+    console.log('useProgress effect - session changed:', session);
     if (session) {
       loadProgress();
+    } else {
+      setProgress(null);
+      setUserAchievements([]);
+      setAchievements([]);
     }
   }, [session]);
 

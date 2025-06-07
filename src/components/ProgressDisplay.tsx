@@ -3,9 +3,13 @@ import { Trophy, Star, Flame, TrendingUp } from 'lucide-react';
 import { useProgress } from '@/hooks/useProgress';
 
 export const ProgressDisplay = () => {
-  const { progress, loading } = useProgress();
+  const { progress, loading, error } = useProgress();
 
-  if (loading || !progress) {
+  console.log('ProgressDisplay - Progress data:', progress);
+  console.log('ProgressDisplay - Loading:', loading);
+  console.log('ProgressDisplay - Error:', error);
+
+  if (loading) {
     return (
       <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
         <div className="animate-pulse">
@@ -16,11 +20,31 @@ export const ProgressDisplay = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
+        <div className="text-red-300 text-sm">
+          Eroare la încărcarea progresului: {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!progress) {
+    return (
+      <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
+        <div className="text-yellow-300 text-sm">
+          Progresul nu este disponibil. Conectează-te pentru a salva progresul.
+        </div>
+      </div>
+    );
+  }
+
   const xpForCurrentLevel = Math.pow(progress.current_level - 1, 2) * 100;
   const xpForNextLevel = Math.pow(progress.current_level, 2) * 100;
   const xpProgress = progress.total_xp - xpForCurrentLevel;
   const xpNeeded = xpForNextLevel - xpForCurrentLevel;
-  const progressPercentage = (xpProgress / xpNeeded) * 100;
+  const progressPercentage = Math.max(0, Math.min(100, (xpProgress / xpNeeded) * 100));
 
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
@@ -73,7 +97,7 @@ export const ProgressDisplay = () => {
         <div className="w-full bg-white/20 rounded-full h-3">
           <div 
             className="bg-gradient-to-r from-cyan-500 to-blue-600 h-3 rounded-full transition-all duration-500"
-            style={{ width: `${Math.min(progressPercentage, 100)}%` }}
+            style={{ width: `${progressPercentage}%` }}
           ></div>
         </div>
       </div>

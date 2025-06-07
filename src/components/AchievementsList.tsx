@@ -3,7 +3,12 @@ import { useProgress } from '@/hooks/useProgress';
 import { Trophy, Lock } from 'lucide-react';
 
 export const AchievementsList = () => {
-  const { achievements, userAchievements, loading } = useProgress();
+  const { achievements, userAchievements, loading, error } = useProgress();
+
+  console.log('AchievementsList - Achievements:', achievements);
+  console.log('AchievementsList - User achievements:', userAchievements);
+  console.log('AchievementsList - Loading:', loading);
+  console.log('AchievementsList - Error:', error);
 
   if (loading) {
     return (
@@ -12,6 +17,34 @@ export const AchievementsList = () => {
           {[...Array(6)].map((_, i) => (
             <div key={i} className="h-16 bg-white/20 rounded"></div>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <Trophy className="h-6 w-6 text-yellow-400" />
+          Realizări
+        </h3>
+        <div className="text-red-300 text-sm">
+          Eroare la încărcarea realizărilor: {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!achievements || achievements.length === 0) {
+    return (
+      <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <Trophy className="h-6 w-6 text-yellow-400" />
+          Realizări
+        </h3>
+        <div className="text-yellow-300 text-sm">
+          Nu sunt realizări disponibile. Conectează-te pentru a vedea realizările.
         </div>
       </div>
     );
