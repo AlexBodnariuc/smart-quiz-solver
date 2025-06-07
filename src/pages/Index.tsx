@@ -1,16 +1,12 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { QuizLoader } from '@/components/QuizLoader';
 import { Quiz } from '@/components/Quiz';
 import { useQuizStorage } from '@/hooks/useQuizStorage';
 import { useEmailAuth } from '@/components/auth/EmailAuthProvider';
-import { useProgress } from '@/hooks/useProgress';
-import { ProgressDisplay } from '@/components/ProgressDisplay';
-import { AchievementNotification } from '@/components/AchievementNotification';
 import { Button } from '@/components/ui/button';
-import { Trophy, User, Plus } from 'lucide-react';
+import { User, Plus, Trophy } from 'lucide-react';
 
 export interface Question {
   id: string;
@@ -35,37 +31,14 @@ interface QuizSession {
   created_at: string;
 }
 
-interface UserAchievement {
-  id: string;
-  achievement_id: string;
-  earned_at: string;
-  achievement: {
-    id: string;
-    name: string;
-    description: string;
-    icon: string;
-    xp_reward: number;
-  };
-}
-
 export default function Index() {
   const [currentQuiz, setCurrentQuiz] = useState<QuizData | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [availableQuizzes, setAvailableQuizzes] = useState<QuizSession[]>([]);
   const [loading, setLoading] = useState(false);
-  const [newAchievements, setNewAchievements] = useState<UserAchievement[]>([]);
   const navigate = useNavigate();
   const { session } = useEmailAuth();
   const { getUserQuizSessions } = useQuizStorage();
-  const { progress, loadProgress } = useProgress();
-
-  // Track daily login for streak system
-  useEffect(() => {
-    if (session) {
-      console.log('User logged in, tracking daily activity for streak');
-      loadProgress(); // This will handle daily login tracking
-    }
-  }, [session, loadProgress]);
 
   useEffect(() => {
     loadAvailableQuizzes();
@@ -90,21 +63,10 @@ export default function Index() {
     setSessionId(sessionId || null);
   };
 
-  const handleQuizComplete = (achievements: UserAchievement[] = []) => {
+  const handleQuizComplete = () => {
     setCurrentQuiz(null);
     setSessionId(null);
     loadAvailableQuizzes();
-    // Reload progress to show updated XP and achievements
-    loadProgress();
-    
-    // Show achievement notifications if any
-    if (achievements.length > 0) {
-      setNewAchievements(achievements);
-    }
-  };
-
-  const handleAchievementClose = () => {
-    setNewAchievements([]);
   };
 
   const startQuiz = async (quiz: QuizSession) => {
@@ -120,19 +82,11 @@ export default function Index() {
 
   if (currentQuiz) {
     return (
-      <>
-        <Quiz
-          quizData={currentQuiz}
-          sessionId={sessionId || undefined}
-          onComplete={handleQuizComplete}
-        />
-        {newAchievements.length > 0 && (
-          <AchievementNotification
-            achievements={newAchievements}
-            onClose={handleAchievementClose}
-          />
-        )}
-      </>
+      <Quiz
+        quizData={currentQuiz}
+        sessionId={sessionId || undefined}
+        onComplete={handleQuizComplete}
+      />
     );
   }
 
@@ -146,30 +100,20 @@ export default function Index() {
               Quiz Academy
             </h1>
             <p className="text-blue-200">
-              Îmbunătățește-ți cunoștințele și câștigă XP!
+              Îmbunătățește-ți cunoștințele prin quiz-uri interactive!
             </p>
           </div>
           
           <div className="flex items-center gap-4">
             {session ? (
-              <>
-                <Button
-                  onClick={() => navigate('/profile')}
-                  variant="outline"
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  Profil
-                </Button>
-                <Button
-                  onClick={() => navigate('/profile')}
-                  variant="outline"
-                  className="bg-yellow-500/20 border-yellow-400/30 text-yellow-300 hover:bg-yellow-500/30"
-                >
-                  <Trophy className="h-4 w-4 mr-2" />
-                  Realizări
-                </Button>
-              </>
+              <Button
+                onClick={() => navigate('/profile')}
+                variant="outline"
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+              >
+                <User className="h-4 w-4 mr-2" />
+                Profil
+              </Button>
             ) : (
               <Button
                 onClick={() => navigate('/auth')}
@@ -180,13 +124,6 @@ export default function Index() {
             )}
           </div>
         </div>
-
-        {/* Progress Display - Show if user is logged in */}
-        {session && (
-          <div className="mb-8">
-            <ProgressDisplay />
-          </div>
-        )}
 
         {/* Main Content */}
         <div className="grid lg:grid-cols-2 gap-8">
@@ -270,28 +207,6 @@ export default function Index() {
           </div>
         </div>
 
-        {/* Stats Summary for Logged-in Users */}
-        {session && progress && (
-          <div className="mt-8 grid md:grid-cols-4 gap-4">
-            <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20 text-center">
-              <div className="text-2xl font-bold text-cyan-400">{progress.total_xp}</div>
-              <div className="text-sm text-blue-200">XP Total</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20 text-center">
-              <div className="text-2xl font-bold text-yellow-400">{progress.current_level}</div>
-              <div className="text-sm text-blue-200">Nivel</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20 text-center">
-              <div className="text-2xl font-bold text-red-400">{progress.current_streak}</div>
-              <div className="text-sm text-blue-200">Streak Curent</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20 text-center">
-              <div className="text-2xl font-bold text-green-400">{progress.longest_streak}</div>
-              <div className="text-sm text-blue-200">Cel Mai Lung</div>
-            </div>
-          </div>
-        )}
-
         {/* Call to Action for Non-logged Users */}
         {!session && (
           <div className="mt-8 text-center">
@@ -300,7 +215,7 @@ export default function Index() {
                 Conectează-te pentru a-ți salva progresul!
               </h3>
               <p className="text-blue-200 mb-6">
-                Câștigă XP, deblochează realizări și urmărește-ți progresul în timp.
+                Creează și salvează quiz-uri personalizate din documentele tale.
               </p>
               <Button
                 onClick={() => navigate('/auth')}
@@ -310,14 +225,6 @@ export default function Index() {
               </Button>
             </div>
           </div>
-        )}
-
-        {/* Achievement Notifications */}
-        {newAchievements.length > 0 && (
-          <AchievementNotification
-            achievements={newAchievements}
-            onClose={handleAchievementClose}
-          />
         )}
       </div>
     </div>

@@ -1,12 +1,11 @@
+
 import { useState, useEffect } from 'react';
 import { QuizData, Question } from '@/pages/Index';
 import { QuestionCard } from './QuestionCard';
 import { QuizResults } from './QuizResults';
-import { AchievementNotification } from './AchievementNotification';
 import { ChevronLeft, ChevronRight, BookOpen, SkipForward } from 'lucide-react';
 import { ProcessedChunk } from '@/utils/csvParser';
 import { useQuizStorage } from '@/hooks/useQuizStorage';
-import { useProgress } from '@/hooks/useProgress';
 
 interface QuizProps {
   quizData: QuizData;
@@ -32,8 +31,6 @@ export const Quiz = ({ quizData, sessionId, onComplete }: QuizProps) => {
   const [showResults, setShowResults] = useState(false);
   const [showPassage, setShowPassage] = useState(false);
   const { saveQuizProgress, completeQuizSession } = useQuizStorage();
-  const { addXP } = useProgress();
-  const [newAchievements, setNewAchievements] = useState<any[]>([]);
 
   const currentQuestion = validQuestions[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === validQuestions.length - 1;
@@ -104,31 +101,6 @@ export const Quiz = ({ quizData, sessionId, onComplete }: QuizProps) => {
       } catch (error) {
         console.error('Error completing quiz session:', error);
       }
-    }
-    
-    // Calculate and award XP
-    const baseXP = correctAnswers * 10; // 10 XP per correct answer
-    const bonusXP = score === 100 ? 50 : 0; // Perfect score bonus
-    const streakBonus = score >= 80 ? 20 : 0; // High score bonus
-    const totalXP = baseXP + bonusXP + streakBonus;
-    
-    console.log('Awarding XP:', {
-      baseXP,
-      bonusXP,
-      streakBonus,
-      totalXP,
-      score
-    });
-    
-    try {
-      const achievements = await addXP(totalXP, score);
-      console.log('New achievements earned:', achievements);
-      
-      if (achievements.length > 0) {
-        setNewAchievements(achievements);
-      }
-    } catch (error) {
-      console.error('Error awarding XP and checking achievements:', error);
     }
 
     setShowResults(true);
@@ -212,14 +184,6 @@ export const Quiz = ({ quizData, sessionId, onComplete }: QuizProps) => {
 
   return (
     <div className="min-h-screen p-6">
-      {/* Achievement Notifications */}
-      {newAchievements.length > 0 && (
-        <AchievementNotification
-          achievements={newAchievements}
-          onClose={() => setNewAchievements([])}
-        />
-      )}
-
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-6 border border-white/20">
