@@ -8,6 +8,7 @@ import { useQuizStorage } from '@/hooks/useQuizStorage';
 import { useEmailAuth } from '@/components/auth/EmailAuthProvider';
 import { useProgress } from '@/hooks/useProgress';
 import { ProgressDisplay } from '@/components/ProgressDisplay';
+import { AchievementNotification } from '@/components/AchievementNotification';
 import { Button } from '@/components/ui/button';
 import { Trophy, User, Plus } from 'lucide-react';
 
@@ -34,11 +35,25 @@ interface QuizSession {
   created_at: string;
 }
 
+interface UserAchievement {
+  id: string;
+  achievement_id: string;
+  earned_at: string;
+  achievement: {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    xp_reward: number;
+  };
+}
+
 export default function Index() {
   const [currentQuiz, setCurrentQuiz] = useState<QuizData | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [availableQuizzes, setAvailableQuizzes] = useState<QuizSession[]>([]);
   const [loading, setLoading] = useState(false);
+  const [newAchievements, setNewAchievements] = useState<UserAchievement[]>([]);
   const navigate = useNavigate();
   const { session } = useEmailAuth();
   const { getUserQuizSessions } = useQuizStorage();
@@ -69,12 +84,21 @@ export default function Index() {
     }
   };
 
-  const handleQuizComplete = () => {
+  const handleQuizComplete = (achievements: UserAchievement[] = []) => {
     setCurrentQuiz(null);
     setSessionId(null);
     loadAvailableQuizzes();
     // Reload progress to show updated XP and achievements
     loadProgress();
+    
+    // Show achievement notifications if any
+    if (achievements.length > 0) {
+      setNewAchievements(achievements);
+    }
+  };
+
+  const handleAchievementClose = () => {
+    setNewAchievements([]);
   };
 
   const startQuiz = async (quiz: QuizSession) => {
@@ -86,11 +110,19 @@ export default function Index() {
 
   if (currentQuiz) {
     return (
-      <Quiz
-        quizData={currentQuiz}
-        sessionId={sessionId || undefined}
-        onComplete={handleQuizComplete}
-      />
+      <>
+        <Quiz
+          quizData={currentQuiz}
+          sessionId={sessionId || undefined}
+          onComplete={handleQuizComplete}
+        />
+        {newAchievements.length > 0 && (
+          <AchievementNotification
+            achievements={newAchievements}
+            onClose={handleAchievementClose}
+          />
+        )}
+      </>
     );
   }
 
@@ -160,10 +192,7 @@ export default function Index() {
               </p>
             </div>
             
-            <QuizLoader onQuizGenerated={(quiz, sessionId) => {
-              setCurrentQuiz(quiz);
-              setSessionId(sessionId);
-            }} />
+            <QuizLoader />
           </div>
 
           {/* Available Quizzes */}
@@ -271,6 +300,14 @@ export default function Index() {
               </Button>
             </div>
           </div>
+        )}
+
+        {/* Achievement Notifications */}
+        {newAchievements.length > 0 && (
+          <AchievementNotification
+            achievements={newAchievements}
+            onClose={handleAchievementClose}
+          />
         )}
       </div>
     </div>
