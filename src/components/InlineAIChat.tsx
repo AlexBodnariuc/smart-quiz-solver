@@ -17,20 +17,17 @@ interface InlineAIChatProps {
   hasAnswered: boolean;
 }
 
+// Store API key internally
+const RESPELL_API_KEY = 'resp_6841cc306930819cbee23d3a2efe2ebe0e06ca3050f39bc8';
+
 export const InlineAIChat = ({ question, hasAnswered }: InlineAIChatProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [showApiKeyInput, setShowApiKeyInput] = useState(true);
   const [chatExpanded, setChatExpanded] = useState(false);
 
   const sendMessage = async (message: string, isInitial = false) => {
     if (!message.trim() && !isInitial) return;
-    if (!apiKey.trim()) {
-      alert('Te rugăm să introduci cheia API Respell mai întâi.');
-      return;
-    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -60,7 +57,7 @@ Te rog explică-mi mai detaliat această întrebare și conceptele din spatele e
       const { data, error } = await supabase.functions.invoke('chat-with-ai', {
         body: {
           message: prompt,
-          apiKey: apiKey
+          apiKey: RESPELL_API_KEY
         }
       });
 
@@ -111,13 +108,6 @@ Te rog explică-mi mai detaliat această întrebare și conceptele din spatele e
     }
   };
 
-  const handleApiKeySubmit = () => {
-    if (apiKey.trim()) {
-      setShowApiKeyInput(false);
-      setChatExpanded(true);
-    }
-  };
-
   const startChat = () => {
     setChatExpanded(true);
     if (messages.length === 0) {
@@ -132,7 +122,7 @@ Te rog explică-mi mai detaliat această întrebare și conceptele din spatele e
       {/* Header Button */}
       {!chatExpanded && (
         <button
-          onClick={() => setShowApiKeyInput(true)}
+          onClick={startChat}
           className="flex items-center gap-2 text-cyan-300 hover:text-cyan-200 font-semibold mb-4 transition-colors"
         >
           <MessageCircle className="h-5 w-5" />
@@ -140,40 +130,8 @@ Te rog explică-mi mai detaliat această întrebare și conceptele din spatele e
         </button>
       )}
 
-      {/* API Key Input */}
-      {showApiKeyInput && (
-        <div className="bg-blue-900/30 rounded-xl p-4 border border-blue-400/30 mb-4">
-          <div className="space-y-4">
-            <div>
-              <label className="text-cyan-300 font-semibold mb-2 block">
-                Cheia API Respell
-              </label>
-              <p className="text-blue-100 text-sm mb-3">
-                Pentru a folosi AI-ul, introdu cheia ta API de la Respell.
-              </p>
-              <div className="flex gap-3">
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="resp_..."
-                  className="flex-1 bg-white/10 border border-white/30 rounded-xl p-3 text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                />
-                <Button
-                  onClick={handleApiKeySubmit}
-                  disabled={!apiKey.trim()}
-                  className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50"
-                >
-                  Începe Chat
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Chat Interface */}
-      {chatExpanded && !showApiKeyInput && (
+      {chatExpanded && (
         <div className="bg-blue-900/30 rounded-xl border border-blue-400/30 overflow-hidden">
           {/* Chat Header */}
           <div className="bg-gradient-to-r from-cyan-500/20 to-blue-600/20 p-4 border-b border-blue-400/20">
