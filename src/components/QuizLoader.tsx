@@ -70,12 +70,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
       console.log(`Loaded ${questionsFromDatabase.length} unique questions from entire corpus`);
       setAllQuestions(questionsFromDatabase);
 
-      // Auto-generate 6 tests if we have enough questions and no tests exist
-      // Updated to work with 150+ questions instead of requiring 300
-      if (questionsFromDatabase.length >= 150 && sessions.length === 0) {
-        console.log('Auto-generating 6 subject tests from entire corpus...');
-        generateDiverseQuizzes(6, questionsFromDatabase);
-      }
+      // Removed auto-generation logic - tests will only be generated when user clicks the button
     } catch (error) {
       console.error('Error loading questions from database:', error);
       
@@ -284,16 +279,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
         await loadAllQuestionsFromDatabase();
         await loadTotalQuestionCount();
         
-        // Get updated question count after upload
-        const updatedQuestions = await getAllQuestionsFromDatabase();
-        
-        // Auto-generate tests if we have enough questions (lowered requirement)
-        if (updatedQuestions.length >= 150) {
-          console.log(`Auto-generating 6 tests from ${updatedQuestions.length} total questions...`);
-          await generateDiverseQuizzes(6, updatedQuestions);
-        }
-        
-        alert(`S-au încărcat ${quizData.questions.length} întrebări din fișierul ${file.name}! Acum sunt disponibile ${updatedQuestions.length} întrebări și s-au generat automat 6 teste diverse.`);
+        alert(`S-au încărcat ${quizData.questions.length} întrebări din fișierul ${file.name}!`);
         
       } catch (error) {
         console.error('Error parsing JSON file:', error);
@@ -372,35 +358,8 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             {quizTitle}
           </h1>
           <p className="text-xl text-blue-100 max-w-2xl mx-auto">
-            {allQuestions.length > 0 
-              ? `Ai ${allQuestions.length} întrebări disponibile! ${subjectQuizzes.length === 0 ? 'Generează 6 teste acum!' : ''}`
-              : 'Baza de date a fost resetată. Încarcă întrebări noi pentru a începe!'
-            }
+            Platforma ta pentru pregătirea admiterii la medicină
           </p>
-          
-          {/* Enhanced Question Statistics */}
-          <div className="mt-6 bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-cyan-300 text-lg font-semibold">
-                  📚 {allQuestions.length} întrebări unice
-                </p>
-                <p className="text-cyan-200 text-sm">din întregul corpus</p>
-              </div>
-              <div>
-                <p className="text-purple-300 text-lg font-semibold">
-                  🗂️ {uploadedQuizzes.length} quiz-uri încărcate
-                </p>
-                <p className="text-purple-200 text-sm">de către utilizator</p>
-              </div>
-              <div>
-                <p className="text-green-300 text-lg font-semibold">
-                  📊 {totalQuestionCount} întrebări totale
-                </p>
-                <p className="text-green-200 text-sm">în baza de date</p>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Loading States */}
@@ -412,7 +371,7 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
                 <h2 className="text-2xl font-bold text-white">Se generează testele...</h2>
               </div>
               <p className="text-purple-100">
-                Creez 6 teste diverse cu câte 50 de întrebări din întregul corpus de {allQuestions.length} întrebări unice
+                Creez 6 teste diverse cu câte 50 de întrebări
               </p>
             </div>
           </div>
@@ -432,13 +391,13 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           </div>
         )}
 
-        {/* Manual Generate Button - Show when we have questions but no tests */}
-        {allQuestions.length >= 150 && subjectQuizzes.length === 0 && !isGenerating && (
+        {/* Manual Generate Button - Always show if we have enough questions */}
+        {allQuestions.length >= 150 && (
           <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 backdrop-blur-lg rounded-2xl p-8 border border-green-400/30 mb-8">
             <div className="text-center">
-              <h2 className="text-3xl font-bold text-white mb-4">Gata să Generezi Testele!</h2>
+              <h2 className="text-3xl font-bold text-white mb-4">Generează Teste</h2>
               <p className="text-green-100 text-lg mb-6">
-                Ai {allQuestions.length} întrebări disponibile. Generează acum 6 teste diverse cu câte 50 de întrebări!
+                Generează 6 teste diverse cu câte 50 de întrebări!
               </p>
               <button
                 onClick={() => generateDiverseQuizzes(6)}
@@ -485,32 +444,27 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
             </div>
             
             {/* Control Buttons */}
-            {allQuestions.length >= 150 && (
-              <div className="text-center mt-8 space-y-4">
-                <div className="flex flex-wrap gap-4 justify-center">
-                  <button
-                    onClick={() => generateDiverseQuizzes(6)}
-                    disabled={isGenerating || storageLoading || isDeduplicating}
-                    className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
-                  >
-                    <RefreshCw className="h-5 w-5" />
-                    {isGenerating ? 'Se regenerează...' : 'Regenerează Testele'}
-                  </button>
-                  
-                  <button
-                    onClick={handleDeduplication}
-                    disabled={isGenerating || storageLoading || isDeduplicating}
-                    className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-orange-600 hover:to-red-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                    {isDeduplicating ? 'Se deduplică...' : 'Deduplică DB'}
-                  </button>
-                </div>
-                <p className="text-purple-200 text-sm">
-                  Regenerează: Creează 6 teste noi cu întrebări din întregul corpus • Deduplică: Elimină întrebările duplicate din baza de date
-                </p>
+            <div className="text-center mt-8 space-y-4">
+              <div className="flex flex-wrap gap-4 justify-center">
+                <button
+                  onClick={() => generateDiverseQuizzes(6)}
+                  disabled={isGenerating || storageLoading || isDeduplicating}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                >
+                  <RefreshCw className="h-5 w-5" />
+                  {isGenerating ? 'Se regenerează...' : 'Regenerează Testele'}
+                </button>
+                
+                <button
+                  onClick={handleDeduplication}
+                  disabled={isGenerating || storageLoading || isDeduplicating}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-orange-600 hover:to-red-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                >
+                  <Trash2 className="h-5 w-5" />
+                  {isDeduplicating ? 'Se deduplică...' : 'Deduplică DB'}
+                </button>
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -519,13 +473,8 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
           <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-lg rounded-2xl p-8 border border-blue-400/30 mb-8 text-center">
             <h2 className="text-3xl font-bold text-white mb-4">Începe cu Prima Încărcare</h2>
             <p className="text-blue-100 text-lg mb-6">
-              Baza de date este goală. Încarcă un fișier JSON cu întrebări pentru a genera automat 6 teste diverse!
+              Încarcă un fișier JSON cu întrebări pentru a începe!
             </p>
-            <div className="bg-blue-500/10 border border-blue-400/30 rounded-lg p-4">
-              <p className="text-blue-200 text-sm">
-                💡 <strong>Sfat:</strong> Odată ce încarcați cel puțin 150 de întrebări, sistemul va genera automat 6 teste diverse cu câte 50 de întrebări fiecare.
-              </p>
-            </div>
           </div>
         )}
 
@@ -561,34 +510,23 @@ export const QuizLoader = ({ onQuizLoad }: QuizLoaderProps) => {
                 </div>
                 
                 <p className="text-blue-200 text-sm">
-                  Selectează un fișier JSON cu întrebări noi pentru a le adăuga la baza de date și a regenera testele automat din întregul corpus
+                  Selectează un fișier JSON cu întrebări noi pentru a le adăuga la baza de date
                 </p>
-                
-                <div className="bg-cyan-500/10 border border-cyan-400/30 rounded-lg p-4 mt-4">
-                  <p className="text-cyan-200 text-sm">
-                    💡 <strong>După încărcare:</strong> Toate întrebările vor fi stocate permanent în baza de date și se vor genera automat 6 teste diverse din întregul corpus disponibil.
-                  </p>
-                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Enhanced Info Section */}
+        {/* Simple Info Section */}
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
           <h3 className="text-lg font-semibold text-white mb-3">Despre Platformă:</h3>
           <div className="text-blue-100 space-y-2">
-            <p>• Ai acum {allQuestions.length} întrebări unice în baza de date</p>
-            <p>• Toate întrebările încărcate sunt stocate permanent</p>
-            <p>• 6 teste generate automat cu minimum 150 de întrebări</p>
-            <p>• Fiecare test conține exact 50 de întrebări selectate din toate întrebările disponibile</p>
-            <p>• Algoritmul asigură diversitatea maximă și utilizarea întregului corpus</p>
-            <p>• Funcționalitate de deduplicare pentru optimizarea bazei de date</p>
+            <p>• Încarcă întrebări prin fișiere JSON</p>
+            <p>• Generează teste personalizate cu câte 50 de întrebări</p>
             <p>• Progresul este salvat automat în cloud</p>
             <p>• Accesează testele de pe orice dispozitiv</p>
             <p>• Explicații detaliate pentru fiecare răspuns</p>
             <p>• Fragmente relevante din cărțile de referință</p>
-            <p>• Monitorizarea precisă a numărului de întrebări disponibile</p>
           </div>
         </div>
       </div>
