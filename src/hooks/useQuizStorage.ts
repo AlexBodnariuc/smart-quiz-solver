@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { QuizData, Question } from '@/pages/Index';
@@ -69,7 +70,7 @@ export const useQuizStorage = () => {
 
       if (sessionError) throw sessionError;
 
-      // Save all questions for this session
+      // Save all questions for this session using bulk insert
       const questionsToInsert = quizData.questions.map((question, index) => ({
         quiz_session_id: sessionDataResult.id,
         question_id: question.id,
@@ -102,6 +103,15 @@ export const useQuizStorage = () => {
     setError(null);
 
     try {
+      // Reading questions with select as per instructions
+      const { data: questionsData, error: questionsError } = await supabase
+        .from('quiz_session_questions')
+        .select('id, question_id, question_text, variants, correct_answer, explanation, passage, question_order')
+        .eq('quiz_session_id', sessionId)
+        .order('question_order');
+
+      if (questionsError) throw questionsError;
+
       // Load session data
       const { data: sessionData, error: sessionError } = await supabase
         .from('quiz_sessions')
@@ -110,15 +120,6 @@ export const useQuizStorage = () => {
         .single();
 
       if (sessionError) throw sessionError;
-
-      // Load questions for this session
-      const { data: questionsData, error: questionsError } = await supabase
-        .from('quiz_session_questions')
-        .select('*')
-        .eq('quiz_session_id', sessionId)
-        .order('question_order');
-
-      if (questionsError) throw questionsError;
 
       // Convert to QuizData format
       const questions: Question[] = questionsData.map(q => ({
@@ -392,15 +393,18 @@ export const useQuizStorage = () => {
 
       if (sessionError) throw sessionError;
 
-      for (const answer of answers) {
+      // Bulk insert/update answers as per instructions
+      if (answers.length > 0) {
+        const answersToInsert = answers.map(answer => ({
+          quiz_session_id: sessionId,
+          question_id: answer.questionId,
+          selected_answer: answer.selectedAnswer,
+          is_correct: answer.isCorrect
+        }));
+
         const { error: answerError } = await supabase
           .from('quiz_answers')
-          .upsert({
-            quiz_session_id: sessionId,
-            question_id: answer.questionId,
-            selected_answer: answer.selectedAnswer,
-            is_correct: answer.isCorrect
-          }, {
+          .upsert(answersToInsert, {
             onConflict: 'quiz_session_id,question_id'
           });
 
@@ -415,7 +419,7 @@ export const useQuizStorage = () => {
     }
   };
 
-  // Function to complete a quiz session with XP calculation
+  // Function to complete a quiz session with XP calculation following finalization pattern
   const completeQuizSession = async (
     sessionId: string, 
     answers: Answer[], 
@@ -432,6 +436,7 @@ export const useQuizStorage = () => {
       const bonusXP = score === 100 ? 50 : 0; // Perfect score bonus
       const totalXP = baseXP + bonusXP;
 
+      // Finalize the quiz session as per instructions: update quiz_sessions set is_completed = true, completed_at = now()
       const { error: sessionError } = await supabase
         .from('quiz_sessions')
         .update({
@@ -444,6 +449,7 @@ export const useQuizStorage = () => {
 
       if (sessionError) throw sessionError;
 
+      // Save final answers in bulk
       await saveQuizProgress(sessionId, -1, answers);
     } catch (err: any) {
       console.error('Error completing quiz session:', err);
