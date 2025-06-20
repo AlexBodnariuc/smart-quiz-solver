@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { QuizData, Question } from '@/pages/Index';
@@ -448,10 +449,25 @@ export const useQuizStorage = () => {
       if (sessionToken) {
         const emailSession = await getEmailSessionByToken(sessionToken);
         if (emailSession) {
+          // First get current XP
+          const { data: currentProgress, error: getProgressError } = await supabase
+            .from('user_progress')
+            .select('total_xp')
+            .eq('email_session_id', emailSession.id)
+            .single();
+
+          if (getProgressError) {
+            console.error('Error getting current progress:', getProgressError);
+            return;
+          }
+
+          const newTotalXP = (currentProgress?.total_xp || 0) + totalXP;
+
+          // Update with the new total
           const { error: progressError } = await supabase
             .from('user_progress')
             .update({
-              total_xp: supabase.raw(`total_xp + ${totalXP}`),
+              total_xp: newTotalXP,
               last_activity_date: new Date().toISOString().split('T')[0],
               updated_at: new Date().toISOString()
             })

@@ -21,6 +21,12 @@ interface EmailAuthContextType {
   updateActivity: () => Promise<void>;
 }
 
+interface AuthResult {
+  success: boolean;
+  error?: string;
+  session?: EmailSession;
+}
+
 const EmailAuthContext = createContext<EmailAuthContextType>({
   session: null,
   loading: true,
@@ -99,7 +105,8 @@ export const EmailAuthProvider = ({ children }: { children: React.ReactNode }) =
 
       if (error) throw error;
 
-      const result = data as { success: boolean; error?: string; session?: EmailSession };
+      // Properly cast the data to our expected type
+      const result = data as AuthResult;
 
       if (!result.success) {
         throw new Error(result.error || 'Login failed');
@@ -135,7 +142,8 @@ export const EmailAuthProvider = ({ children }: { children: React.ReactNode }) =
 
       if (error) throw error;
 
-      const result = data as { success: boolean; error?: string; session?: EmailSession };
+      // Properly cast the data to our expected type
+      const result = data as AuthResult;
 
       if (!result.success) {
         throw new Error(result.error || 'Registration failed');
