@@ -123,6 +123,45 @@ export type Database = {
         }
         Relationships: []
       }
+      anatomical_models: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          difficulty: string | null
+          file_size: number
+          glb_data: string
+          id: string
+          name: string
+          tags: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          description?: string | null
+          difficulty?: string | null
+          file_size: number
+          glb_data: string
+          id?: string
+          name: string
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          difficulty?: string | null
+          file_size?: number
+          glb_data?: string
+          id?: string
+          name?: string
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           created_at: string
@@ -193,25 +232,37 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          email_verified: boolean | null
           id: string
           is_active: boolean
           last_active: string
+          password_hash: string | null
+          reset_token: string | null
+          reset_token_expires_at: string | null
           session_token: string
         }
         Insert: {
           created_at?: string
           email: string
+          email_verified?: boolean | null
           id?: string
           is_active?: boolean
           last_active?: string
+          password_hash?: string | null
+          reset_token?: string | null
+          reset_token_expires_at?: string | null
           session_token?: string
         }
         Update: {
           created_at?: string
           email?: string
+          email_verified?: boolean | null
           id?: string
           is_active?: boolean
           last_active?: string
+          password_hash?: string | null
+          reset_token?: string | null
+          reset_token_expires_at?: string | null
           session_token?: string
         }
         Relationships: []
@@ -250,15 +301,7 @@ export type Database = {
           status?: string | null
           tenant_name?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "meter_reading_requests_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "whatsapp_conversations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       payment_transactions: {
         Row: {
@@ -346,6 +389,39 @@ export type Database = {
           total_questions?: number | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          active: boolean | null
+          attrs: Json | null
+          created: string | null
+          default_price: string | null
+          description: string | null
+          id: string | null
+          name: string | null
+          updated: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          attrs?: Json | null
+          created?: string | null
+          default_price?: string | null
+          description?: string | null
+          id?: string | null
+          name?: string | null
+          updated?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          attrs?: Json | null
+          created?: string | null
+          default_price?: string | null
+          description?: string | null
+          id?: string | null
+          name?: string | null
+          updated?: string | null
         }
         Relationships: []
       }
@@ -1014,88 +1090,15 @@ export type Database = {
           },
         ]
       }
-      whatsapp_conversations: {
-        Row: {
-          created_at: string | null
-          id: string
-          last_message: string | null
-          last_message_time: string | null
-          phone_number: string
-          status: string | null
-          tenant_name: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          last_message?: string | null
-          last_message_time?: string | null
-          phone_number: string
-          status?: string | null
-          tenant_name?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          last_message?: string | null
-          last_message_time?: string | null
-          phone_number?: string
-          status?: string | null
-          tenant_name?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      whatsapp_messages: {
-        Row: {
-          content: string
-          conversation_id: string | null
-          id: string
-          is_read: boolean | null
-          message_id: string | null
-          message_type: string | null
-          metadata: Json | null
-          sender: string
-          timestamp: string | null
-        }
-        Insert: {
-          content: string
-          conversation_id?: string | null
-          id?: string
-          is_read?: boolean | null
-          message_id?: string | null
-          message_type?: string | null
-          metadata?: Json | null
-          sender: string
-          timestamp?: string | null
-        }
-        Update: {
-          content?: string
-          conversation_id?: string | null
-          id?: string
-          is_read?: boolean | null
-          message_id?: string | null
-          message_type?: string | null
-          metadata?: Json | null
-          sender?: string
-          timestamp?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "whatsapp_messages_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "whatsapp_conversations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      create_email_account: {
+        Args: { input_email: string; input_password: string }
+        Returns: Json
+      }
       gtrgm_compress: {
         Args: { "": unknown }
         Returns: unknown
@@ -1127,6 +1130,10 @@ export type Database = {
       show_trgm: {
         Args: { "": string }
         Returns: string[]
+      }
+      verify_email_password: {
+        Args: { input_email: string; input_password: string }
+        Returns: Json
       }
     }
     Enums: {

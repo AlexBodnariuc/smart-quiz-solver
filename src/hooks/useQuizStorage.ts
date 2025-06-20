@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { QuizData, Question } from '@/pages/Index';
@@ -53,13 +52,13 @@ export const useQuizStorage = () => {
         emailSessionId = emailSession?.id || null;
       }
 
-      // Create quiz session with optional email_session_id
+      // Create quiz session with email_session_id (required for authenticated users)
       const sessionData = {
         title: quizData.title,
         total_questions: quizData.questions.length,
         current_question_index: 0,
         is_completed: false,
-        ...(emailSessionId && { email_session_id: emailSessionId })
+        email_session_id: emailSessionId
       };
 
       const { data: sessionDataResult, error: sessionError } = await supabase
@@ -153,15 +152,7 @@ export const useQuizStorage = () => {
       const sessionToken = getCurrentEmailSessionId();
       
       if (!sessionToken) {
-        // If no session token, return all public sessions
-        const { data, error } = await supabase
-          .from('quiz_sessions')
-          .select('*')
-          .is('email_session_id', null)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        return data || [];
+        return [];
       }
 
       // Get email session for current user
@@ -171,11 +162,11 @@ export const useQuizStorage = () => {
         return [];
       }
 
-      // Get sessions for this email session + public sessions
+      // Get sessions for this email session
       const { data, error } = await supabase
         .from('quiz_sessions')
         .select('*')
-        .or(`email_session_id.eq.${emailSession.id},email_session_id.is.null`)
+        .eq('email_session_id', emailSession.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -393,7 +384,7 @@ export const useQuizStorage = () => {
 
       if (sessionError) throw sessionError;
 
-      // Bulk insert/update answers as per instructions
+      // Bulk insert/update answers
       if (answers.length > 0) {
         const answersToInsert = answers.map(answer => ({
           quiz_session_id: sessionId,
@@ -436,7 +427,7 @@ export const useQuizStorage = () => {
       const bonusXP = score === 100 ? 50 : 0; // Perfect score bonus
       const totalXP = baseXP + bonusXP;
 
-      // Finalize the quiz session as per instructions: update quiz_sessions set is_completed = true, completed_at = now()
+      // Complete the quiz session
       const { error: sessionError } = await supabase
         .from('quiz_sessions')
         .update({
@@ -451,6 +442,26 @@ export const useQuizStorage = () => {
 
       // Save final answers in bulk
       await saveQuizProgress(sessionId, -1, answers);
+
+      // Update user progress with earned XP
+      const sessionToken = getCurrentEmailSessionId();
+      if (sessionToken) {
+        const emailSession = await getEmailSessionByToken(sessionToken);
+        if (emailSession) {
+          const { error: progressError } = await supabase
+            .from('user_progress')
+            .update({
+              total_xp: supabase.raw(`total_xp + ${totalXP}`),
+              last_activity_date: new Date().toISOString().split('T')[0],
+              updated_at: new Date().toISOString()
+            })
+            .eq('email_session_id', emailSession.id);
+
+          if (progressError) {
+            console.error('Error updating user progress:', progressError);
+          }
+        }
+      }
     } catch (err: any) {
       console.error('Error completing quiz session:', err);
       setError(err.message);
