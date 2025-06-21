@@ -1,9 +1,10 @@
-
 import { useState } from 'react';
 import { Question } from '@/pages/Index';
-import { CheckCircle, XCircle, Eye } from 'lucide-react';
+import { CheckCircle, XCircle, Eye, MessageCircle } from 'lucide-react';
 import { PassageDisplay } from './PassageDisplay';
+import { QuestionChat } from './QuestionChat';
 import { ProcessedChunk } from '@/utils/csvParser';
+import { Button } from '@/components/ui/button';
 
 interface QuestionCardProps {
   question: Question;
@@ -21,6 +22,7 @@ export const QuestionCard = ({
   questionNumber 
 }: QuestionCardProps) => {
   const [showExplanation, setShowExplanation] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   const handleAnswerClick = (answerIndex: number) => {
     if (!hasAnswered) {
@@ -73,79 +75,101 @@ export const QuestionCard = ({
   const passageChunks = getPassageChunks();
 
   return (
-    <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
-      {/* Question Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <div className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center font-bold">
-          {questionNumber}
+    <>
+      <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
+        {/* Question Header */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center font-bold">
+            {questionNumber}
+          </div>
+          <h2 className="text-2xl font-bold text-white flex-1">{question.text}</h2>
         </div>
-        <h2 className="text-2xl font-bold text-white flex-1">{question.text}</h2>
-      </div>
 
-      {/* Answer Options */}
-      <div className="space-y-4 mb-6">
-        {question.variants.map((variant, index) => (
-          <button
-            key={index}
-            onClick={() => handleAnswerClick(index)}
-            disabled={hasAnswered}
-            className={`
-              w-full p-4 rounded-xl border-2 transition-all duration-300 text-left flex items-center justify-between group
-              ${getAnswerStyle(index)}
-              ${!hasAnswered && 'hover:shadow-lg transform hover:scale-[1.02]'}
-            `}
-          >
-            <span className="font-medium">
-              <span className="text-cyan-300 font-bold mr-3">
-                {String.fromCharCode(65 + index)}.
+        {/* Answer Options */}
+        <div className="space-y-4 mb-6">
+          {question.variants.map((variant, index) => (
+            <button
+              key={index}
+              onClick={() => handleAnswerClick(index)}
+              disabled={hasAnswered}
+              className={`
+                w-full p-4 rounded-xl border-2 transition-all duration-300 text-left flex items-center justify-between group
+                ${getAnswerStyle(index)}
+                ${!hasAnswered && 'hover:shadow-lg transform hover:scale-[1.02]'}
+              `}
+            >
+              <span className="font-medium">
+                <span className="text-cyan-300 font-bold mr-3">
+                  {String.fromCharCode(65 + index)}.
+                </span>
+                {variant}
               </span>
-              {variant}
-            </span>
-            {getAnswerIcon(index)}
-          </button>
-        ))}
+              {getAnswerIcon(index)}
+            </button>
+          ))}
+        </div>
+
+        {/* Ask AI Button */}
+        <div className="mb-6">
+          <Button
+            onClick={() => setShowChat(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+          >
+            <MessageCircle className="h-4 w-4" />
+            Întreabă AI-ul
+          </Button>
+        </div>
+
+        {/* Explanation Section */}
+        {hasAnswered && question.explanation && (
+          <div className="border-t border-white/20 pt-6">
+            <button
+              onClick={() => setShowExplanation(!showExplanation)}
+              className="flex items-center gap-2 text-cyan-300 hover:text-cyan-200 font-semibold mb-4 transition-colors"
+            >
+              <Eye className="h-5 w-5" />
+              {showExplanation ? 'Ascunde' : 'Afișează'} Explicația
+            </button>
+            
+            {showExplanation && (
+              <div>
+                <div className="bg-blue-900/30 rounded-xl p-4 border border-blue-400/30 mb-4">
+                  <p className="text-blue-100 leading-relaxed">{question.explanation}</p>
+                </div>
+                
+                {/* Display passage chunks */}
+                {passageChunks.length > 0 && (
+                  <PassageDisplay chunks={passageChunks} />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Answer Feedback */}
+        {hasAnswered && (
+          <div className="mt-6">
+            {selectedAnswer === question.correctAnswer ? (
+              <div className="flex items-center gap-2 text-green-300 font-semibold">
+                <CheckCircle className="h-6 w-6" />
+                Corect! Felicitări!
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-red-300 font-semibold">
+                <XCircle className="h-6 w-6" />
+                Incorect. Răspunsul corect este: {String.fromCharCode(65 + question.correctAnswer)}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Explanation Section */}
-      {hasAnswered && question.explanation && (
-        <div className="border-t border-white/20 pt-6">
-          <button
-            onClick={() => setShowExplanation(!showExplanation)}
-            className="flex items-center gap-2 text-cyan-300 hover:text-cyan-200 font-semibold mb-4 transition-colors"
-          >
-            <Eye className="h-5 w-5" />
-            {showExplanation ? 'Ascunde' : 'Afișează'} Explicația
-          </button>
-          
-          {showExplanation && (
-            <div className="bg-blue-900/30 rounded-xl p-4 border border-blue-400/30 mb-4">
-              <p className="text-blue-100 leading-relaxed">{question.explanation}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Passage Display - restored */}
-      {hasAnswered && passageChunks.length > 0 && (
-        <PassageDisplay chunks={passageChunks} />
-      )}
-
-      {/* Answer Feedback */}
-      {hasAnswered && (
-        <div className="mt-6">
-          {selectedAnswer === question.correctAnswer ? (
-            <div className="flex items-center gap-2 text-green-300 font-semibold">
-              <CheckCircle className="h-6 w-6" />
-              Corect! Felicitări!
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-red-300 font-semibold">
-              <XCircle className="h-6 w-6" />
-              Incorect. Răspunsul corect este: {String.fromCharCode(65 + question.correctAnswer)}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+      {/* Question Chat Modal */}
+      <QuestionChat
+        question={question}
+        isOpen={showChat}
+        onClose={() => setShowChat(false)}
+      />
+    </>
   );
 };

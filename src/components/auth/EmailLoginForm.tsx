@@ -1,17 +1,14 @@
 
 import { useState } from 'react';
 import { useEmailAuth } from './EmailAuthProvider';
-import { Brain, Mail, LogIn, UserPlus, Lock, Eye, EyeOff } from 'lucide-react';
+import { Brain, Mail, LogIn } from 'lucide-react';
 
 export const EmailLoginForm = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const { signInWithPassword, signUpWithPassword } = useEmailAuth();
+  const { signInWithEmail } = useEmailAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,13 +17,8 @@ export const EmailLoginForm = () => {
     setSuccess('');
 
     try {
-      if (isLogin) {
-        await signInWithPassword(email, password);
-        setSuccess('Te-ai conectat cu succes!');
-      } else {
-        await signUpWithPassword(email, password);
-        setSuccess('Contul a fost creat cu succes!');
-      }
+      await signInWithEmail(email);
+      setSuccess('Te-ai conectat cu succes!');
     } catch (err: any) {
       setError(err.message || 'A apărut o eroare');
     } finally {
@@ -45,10 +37,10 @@ export const EmailLoginForm = () => {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">
-            {isLogin ? 'Conectează-te' : 'Creează cont'}
+            Conectează-te cu Email
           </h1>
           <p className="text-blue-100">
-            {isLogin ? 'Accesează quiz-urile tale' : 'Începe călătoria ta în medicină'}
+            Introdu adresa ta de email pentru a accesa quiz-urile
           </p>
         </div>
 
@@ -72,38 +64,6 @@ export const EmailLoginForm = () => {
                   required
                 />
               </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-white text-sm font-medium mb-2">
-                Parolă
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-blue-300" />
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 bg-white/10 border border-white/30 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  placeholder={isLogin ? "Parola ta" : "Minim 6 caractere"}
-                  required
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-blue-300 hover:text-white transition-colors"
-                >
-                  {showPassword ? <EyeOff /> : <Eye />}
-                </button>
-              </div>
-              {!isLogin && (
-                <p className="text-blue-200 text-xs mt-1">
-                  Parola trebuie să aibă cel puțin 6 caractere
-                </p>
-              )}
             </div>
 
             {/* Error Message */}
@@ -133,27 +93,18 @@ export const EmailLoginForm = () => {
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
-                  {isLogin ? <LogIn className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
-                  {isLogin ? 'Conectează-te' : 'Creează cont'}
+                  <LogIn className="h-5 w-5" />
+                  Conectează-te
                 </div>
               )}
             </button>
           </form>
 
-          {/* Toggle Form */}
+          {/* Info */}
           <div className="mt-6 text-center">
-            <button
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setError('');
-                setSuccess('');
-              }}
-              className="text-cyan-300 hover:text-cyan-200 transition-colors"
-            >
-              {isLogin 
-                ? 'Nu ai cont? Creează unul aici' 
-                : 'Ai deja cont? Conectează-te aici'}
-            </button>
+            <p className="text-blue-200 text-sm">
+              Nu este nevoie de parolă - doar introdu emailul pentru a accesa platforma
+            </p>
           </div>
         </div>
       </div>

@@ -9,29 +9,20 @@ interface EmailSession {
   created_at: string;
   last_active: string;
   is_active: boolean;
-  email_verified: boolean;
 }
 
 interface EmailAuthContextType {
   session: EmailSession | null;
   loading: boolean;
-  signInWithPassword: (email: string, password: string) => Promise<void>;
-  signUpWithPassword: (email: string, password: string) => Promise<void>;
+  signInWithEmail: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateActivity: () => Promise<void>;
-}
-
-interface AuthResult {
-  success: boolean;
-  error?: string;
-  session?: EmailSession;
 }
 
 const EmailAuthContext = createContext<EmailAuthContextType>({
   session: null,
   loading: true,
-  signInWithPassword: async () => {},
-  signUpWithPassword: async () => {},
+  signInWithEmail: async () => {},
   signOut: async () => {},
   updateActivity: async () => {},
 });
@@ -96,66 +87,54 @@ export const EmailAuthProvider = ({ children }: { children: React.ReactNode }) =
     }
   };
 
-  const signInWithPassword = async (email: string, password: string) => {
+  const signInWithEmail = async (email: string) => {
     try {
-      const { data, error } = await supabase.rpc('verify_email_password', {
-        input_email: email,
-        input_password: password
-      });
+      // First, check if a session already exists for this email
+      const { data: existingSession } = await supabase
+        .from('email_sessions')
+        .select('*')
+        .eq('email', email)
+        .eq('is_active', true)
+        .single();
 
-      if (error) throw error;
+      let sessionData;
 
-      // Properly cast the data to our expected type
-      const result = data as AuthResult;
+      if (existingSession) {
+        // Update existing session
+        const { data, error } = await supabase
+          .from('email_sessions')
+          .update({ 
+            last_active: new Date().toISOString(),
+            session_token: crypto.randomUUID()
+          })
+          .eq('id', existingSession.id)
+          .select()
+          .single();
 
-      if (!result.success) {
-        throw new Error(result.error || 'Login failed');
+        if (error) throw error;
+        sessionData = data;
+      } else {
+        // Create new session
+        const { data, error } = await supabase
+          .from('email_sessions')
+          .insert({
+            email,
+            session_token: crypto.randomUUID(),
+            is_active: true
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        sessionData = data;
       }
 
-      if (result.session) {
-        localStorage.setItem('email_session_token', result.session.session_token);
-        setSession(result.session);
-      }
+      // Store session token in localStorage
+      localStorage.setItem('email_session_token', sessionData.session_token);
+      setSession(sessionData);
     } catch (err: any) {
       console.error('Sign in error:', err);
       throw new Error(err.message || 'Failed to sign in');
-    }
-  };
-
-  const signUpWithPassword = async (email: string, password: string) => {
-    try {
-      // Basic email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        throw new Error('Please enter a valid email address');
-      }
-
-      // Basic password validation
-      if (password.length < 6) {
-        throw new Error('Password must be at least 6 characters long');
-      }
-
-      const { data, error } = await supabase.rpc('create_email_account', {
-        input_email: email,
-        input_password: password
-      });
-
-      if (error) throw error;
-
-      // Properly cast the data to our expected type
-      const result = data as AuthResult;
-
-      if (!result.success) {
-        throw new Error(result.error || 'Registration failed');
-      }
-
-      if (result.session) {
-        localStorage.setItem('email_session_token', result.session.session_token);
-        setSession(result.session);
-      }
-    } catch (err: any) {
-      console.error('Sign up error:', err);
-      throw new Error(err.message || 'Failed to create account');
     }
   };
 
@@ -184,8 +163,7 @@ export const EmailAuthProvider = ({ children }: { children: React.ReactNode }) =
   const value = {
     session,
     loading,
-    signInWithPassword,
-    signUpWithPassword,
+    signInWithEmail,
     signOut,
     updateActivity,
   };

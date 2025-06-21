@@ -71,7 +71,7 @@ serve(async (req) => {
     console.log('Making request to Respell API...');
     console.log('Request payload:', JSON.stringify(respellRequestBody));
 
-    // Make request to Respell API
+    // Make request to Respell API with simplified approach
     let response;
     try {
       response = await fetch('https://api.respell.ai/v1/run', {
@@ -87,6 +87,7 @@ serve(async (req) => {
     } catch (fetchError) {
       console.error('Network error when calling Respell API:', fetchError.message);
       
+      // Return a helpful error message
       return new Response(JSON.stringify({ 
         error: 'Nu se poate conecta la serviciul Respell AI. Este posibil ca serviciul să nu fie disponibil momentan.',
         details: fetchError.message

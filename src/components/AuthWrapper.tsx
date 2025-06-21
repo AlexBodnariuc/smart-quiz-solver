@@ -28,8 +28,8 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
       {/* Header with user info and logout */}
-      <div className="fixed top-4 right-4 z-50">
-        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-3 border border-white/20 flex items-center gap-3 shadow-lg">
+      <div className="absolute top-4 right-4 z-10">
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-3 border border-white/20 flex items-center gap-3">
           <div className="flex items-center gap-2 text-white">
             <User className="h-4 w-4" />
             <span className="text-sm font-medium">{session.email}</span>
@@ -44,10 +44,7 @@ export const AuthWrapper = ({ children }: AuthWrapperProps) => {
         </div>
       </div>
       
-      {/* Main content with top margin to prevent overlap */}
-      <div className="pt-20">
-        {children}
-      </div>
+      {children}
     </div>
   );
 };

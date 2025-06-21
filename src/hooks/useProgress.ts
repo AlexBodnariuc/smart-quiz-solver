@@ -83,102 +83,6 @@ export const useProgress = () => {
     return getXpForLevel(currentLevel + 1);
   };
 
-  const trackDailyLogin = async (emailSessionId: string): Promise<number> => {
-    const today = new Date().toISOString().split('T')[0];
-    
-    console.log('Tracking daily login for:', emailSessionId, 'Date:', today);
-
-    try {
-      // Get current progress with proper error handling
-      const { data: currentProgress, error: progressError } = await supabase
-        .from('user_progress')
-        .select('*')
-        .eq('email_session_id', emailSessionId)
-        .maybeSingle();
-
-      if (progressError) {
-        console.error('Error getting current progress for login tracking:', progressError);
-        return 0;
-      }
-
-      if (!currentProgress) {
-        console.log('No progress found, user needs initial setup');
-        return 0;
-      }
-
-      // Check if user already logged in today
-      if (currentProgress.last_activity_date === today) {
-        console.log('User already logged in today, no additional XP');
-        return 0;
-      }
-
-      // Calculate new streak and XP
-      let newStreak = currentProgress.current_streak;
-      let newLongestStreak = currentProgress.longest_streak;
-      let dailyLoginXP = 10; // Base daily login XP
-
-      if (currentProgress.last_activity_date) {
-        const lastActivity = new Date(currentProgress.last_activity_date);
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        
-        if (lastActivity.toISOString().split('T')[0] === yesterday.toISOString().split('T')[0]) {
-          // Consecutive day - increment streak
-          newStreak += 1;
-          newLongestStreak = Math.max(newLongestStreak, newStreak);
-          // Bonus XP for maintaining streak
-          dailyLoginXP += Math.min(newStreak * 2, 50); // Up to 50 bonus XP
-        } else {
-          // Streak broken - reset to 1
-          newStreak = 1;
-        }
-      } else {
-        // First activity - start streak
-        newStreak = 1;
-        newLongestStreak = Math.max(newLongestStreak, 1);
-      }
-
-      const newXP = currentProgress.total_xp + dailyLoginXP;
-      const newLevel = calculateLevel(newXP);
-
-      // Update progress
-      const { error: updateError } = await supabase
-        .from('user_progress')
-        .update({
-          total_xp: newXP,
-          current_level: newLevel,
-          current_streak: newStreak,
-          longest_streak: newLongestStreak,
-          last_activity_date: today,
-          updated_at: new Date().toISOString()
-        })
-        .eq('email_session_id', emailSessionId);
-
-      if (updateError) {
-        console.error('Error updating progress for daily login:', updateError);
-        return 0;
-      }
-
-      console.log(`Daily login tracked: +${dailyLoginXP} XP, Streak: ${newStreak}, Total XP: ${newXP}`);
-
-      // Update local state
-      setProgress(prev => prev ? {
-        ...prev,
-        total_xp: newXP,
-        current_level: newLevel,
-        current_streak: newStreak,
-        longest_streak: newLongestStreak,
-        last_activity_date: today,
-        updated_at: new Date().toISOString()
-      } : null);
-
-      return dailyLoginXP;
-    } catch (err: any) {
-      console.error('Error in trackDailyLogin:', err);
-      return 0;
-    }
-  };
-
   const loadProgress = async () => {
     if (!session) {
       console.log('No session, clearing progress data');
@@ -202,15 +106,14 @@ export const useProgress = () => {
 
       console.log('Loading progress for email session:', emailSessionId);
 
-      // Load user progress with proper error handling
+      // Load user progress
       const { data: progressData, error: progressError } = await supabase
         .from('user_progress')
         .select('*')
         .eq('email_session_id', emailSessionId)
-        .maybeSingle();
+        .single();
 
-      if (progressError) {
-        console.error('Error loading progress:', progressError);
+      if (progressError && progressError.code !== 'PGRST116') {
         throw progressError;
       }
 
@@ -230,22 +133,12 @@ export const useProgress = () => {
           .select()
           .single();
 
-        if (createError) {
-          console.error('Error creating progress:', createError);
-          throw createError;
-        }
-
+        if (createError) throw createError;
         console.log('Created new progress:', newProgress);
         setProgress(newProgress);
-        
-        // Track daily login for new user
-        await trackDailyLogin(emailSessionId);
       } else {
         console.log('Loaded existing progress:', progressData);
         setProgress(progressData);
-        
-        // Track daily login
-        await trackDailyLogin(emailSessionId);
       }
 
       // Load all achievements
@@ -254,12 +147,9 @@ export const useProgress = () => {
         .select('*')
         .order('condition_value');
 
-      if (achievementsError) {
-        console.error('Error loading achievements:', achievementsError);
-      } else {
-        console.log('Loaded achievements:', achievementsData);
-        setAchievements(achievementsData || []);
-      }
+      if (achievementsError) throw achievementsError;
+      console.log('Loaded achievements:', achievementsData);
+      setAchievements(achievementsData || []);
 
       // Load user achievements
       const { data: userAchievementsData, error: userAchievementsError } = await supabase
@@ -270,16 +160,13 @@ export const useProgress = () => {
         `)
         .eq('email_session_id', emailSessionId);
 
-      if (userAchievementsError) {
-        console.error('Error loading user achievements:', userAchievementsError);
-      } else {
-        console.log('Loaded user achievements:', userAchievementsData);
-        setUserAchievements(userAchievementsData || []);
-      }
+      if (userAchievementsError) throw userAchievementsError;
+      console.log('Loaded user achievements:', userAchievementsData);
+      setUserAchievements(userAchievementsData || []);
 
     } catch (err: any) {
       console.error('Error loading progress:', err);
-      setError(err.message || 'Failed to load progress');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -299,75 +186,70 @@ export const useProgress = () => {
 
     console.log('Adding XP:', xpAmount, 'Current XP:', progress.total_xp);
 
-    try {
-      const newXP = progress.total_xp + xpAmount;
-      const newLevel = calculateLevel(newXP);
-      const today = new Date().toISOString().split('T')[0];
+    const newXP = progress.total_xp + xpAmount;
+    const newLevel = calculateLevel(newXP);
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Calculate streak
+    let newStreak = progress.current_streak;
+    let newLongestStreak = progress.longest_streak;
+
+    if (progress.last_activity_date) {
+      const lastActivity = new Date(progress.last_activity_date);
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
       
-      // Calculate streak (quiz completion can also maintain streak)
-      let newStreak = progress.current_streak;
-      let newLongestStreak = progress.longest_streak;
-
-      if (progress.last_activity_date) {
-        const lastActivity = new Date(progress.last_activity_date);
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        
-        if (progress.last_activity_date === today) {
-          // Same day - no streak change but activity tracked
-        } else if (lastActivity.toISOString().split('T')[0] === yesterday.toISOString().split('T')[0]) {
-          // Consecutive day - increment streak
-          newStreak += 1;
-          newLongestStreak = Math.max(newLongestStreak, newStreak);
-        } else {
-          // Streak broken - reset to 1
-          newStreak = 1;
-        }
+      if (progress.last_activity_date === today) {
+        // Same day - no streak change
+      } else if (lastActivity.toISOString().split('T')[0] === yesterday.toISOString().split('T')[0]) {
+        // Consecutive day - increment streak
+        newStreak += 1;
+        newLongestStreak = Math.max(newLongestStreak, newStreak);
       } else {
-        // First activity - start streak
+        // Streak broken - reset to 1
         newStreak = 1;
-        newLongestStreak = Math.max(newLongestStreak, 1);
       }
+    } else {
+      // First activity - start streak
+      newStreak = 1;
+      newLongestStreak = Math.max(newLongestStreak, 1);
+    }
 
-      // Update progress
-      const { error: updateError } = await supabase
-        .from('user_progress')
-        .update({
-          total_xp: newXP,
-          current_level: newLevel,
-          current_streak: newStreak,
-          longest_streak: newLongestStreak,
-          last_activity_date: today,
-          updated_at: new Date().toISOString()
-        })
-        .eq('email_session_id', emailSessionId);
-
-      if (updateError) {
-        console.error('Error updating progress:', updateError);
-        return [];
-      }
-
-      console.log('Updated progress - New XP:', newXP, 'New Level:', newLevel);
-
-      // Update local state
-      setProgress(prev => prev ? {
-        ...prev,
+    // Update progress
+    const { error: updateError } = await supabase
+      .from('user_progress')
+      .update({
         total_xp: newXP,
         current_level: newLevel,
         current_streak: newStreak,
         longest_streak: newLongestStreak,
         last_activity_date: today,
         updated_at: new Date().toISOString()
-      } : null);
+      })
+      .eq('email_session_id', emailSessionId);
 
-      // Check for new achievements
-      const newAchievements = await checkAndAwardAchievements(emailSessionId, newXP, newLevel, newStreak, quizScore);
-      
-      return newAchievements;
-    } catch (err: any) {
-      console.error('Error adding XP:', err);
+    if (updateError) {
+      console.error('Error updating progress:', updateError);
       return [];
     }
+
+    console.log('Updated progress - New XP:', newXP, 'New Level:', newLevel);
+
+    // Update local state
+    setProgress(prev => prev ? {
+      ...prev,
+      total_xp: newXP,
+      current_level: newLevel,
+      current_streak: newStreak,
+      longest_streak: newLongestStreak,
+      last_activity_date: today,
+      updated_at: new Date().toISOString()
+    } : null);
+
+    // Check for new achievements
+    const newAchievements = await checkAndAwardAchievements(emailSessionId, newXP, newLevel, newStreak, quizScore);
+    
+    return newAchievements;
   };
 
   const checkAndAwardAchievements = async (
@@ -382,93 +264,88 @@ export const useProgress = () => {
 
     console.log('Checking achievements for:', { totalXP, currentLevel, currentStreak, quizScore });
 
-    try {
-      // Get total completed quizzes
-      const { data: completedQuizzes, error: quizError } = await supabase
-        .from('quiz_sessions')
-        .select('id')
-        .eq('email_session_id', emailSessionId)
-        .eq('is_completed', true);
+    // Get total completed quizzes
+    const { data: completedQuizzes, error: quizError } = await supabase
+      .from('quiz_sessions')
+      .select('id')
+      .eq('email_session_id', emailSessionId)
+      .eq('is_completed', true);
 
-      if (quizError) {
-        console.error('Error getting completed quizzes:', quizError);
-        return [];
-      }
-
-      const totalQuizzes = completedQuizzes?.length || 0;
-      console.log('Total completed quizzes:', totalQuizzes);
-
-      for (const achievement of achievements) {
-        if (earnedAchievementIds.includes(achievement.id)) continue;
-
-        let shouldAward = false;
-
-        switch (achievement.condition_type) {
-          case 'total_quizzes':
-            shouldAward = totalQuizzes >= achievement.condition_value;
-            break;
-          case 'perfect_score':
-            shouldAward = quizScore === achievement.condition_value;
-            break;
-          case 'streak':
-            shouldAward = currentStreak >= achievement.condition_value;
-            break;
-          case 'level_reached':
-            shouldAward = currentLevel >= achievement.condition_value;
-            break;
-        }
-
-        console.log('Achievement check:', achievement.name, 'should award:', shouldAward);
-
-        if (shouldAward) {
-          const { data: newAchievement, error: achievementError } = await supabase
-            .from('user_achievements')
-            .insert({
-              email_session_id: emailSessionId,
-              achievement_id: achievement.id
-            })
-            .select(`
-              *,
-              achievement:achievements(*)
-            `)
-            .single();
-
-          if (!achievementError && newAchievement) {
-            console.log('Awarded achievement:', newAchievement);
-            newAchievements.push(newAchievement);
-            
-            // Award XP bonus for achievement
-            if (achievement.xp_reward > 0) {
-              await supabase
-                .from('user_progress')
-                .update({
-                  total_xp: totalXP + achievement.xp_reward,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('email_session_id', emailSessionId);
-
-              // Update local state with bonus XP
-              setProgress(prev => prev ? {
-                ...prev,
-                total_xp: prev.total_xp + achievement.xp_reward,
-                updated_at: new Date().toISOString()
-              } : null);
-            }
-          } else {
-            console.error('Error awarding achievement:', achievementError);
-          }
-        }
-      }
-
-      if (newAchievements.length > 0) {
-        setUserAchievements(prev => [...prev, ...newAchievements]);
-      }
-
-      return newAchievements;
-    } catch (err: any) {
-      console.error('Error checking achievements:', err);
+    if (quizError) {
+      console.error('Error getting completed quizzes:', quizError);
       return [];
     }
+
+    const totalQuizzes = completedQuizzes?.length || 0;
+    console.log('Total completed quizzes:', totalQuizzes);
+
+    for (const achievement of achievements) {
+      if (earnedAchievementIds.includes(achievement.id)) continue;
+
+      let shouldAward = false;
+
+      switch (achievement.condition_type) {
+        case 'total_quizzes':
+          shouldAward = totalQuizzes >= achievement.condition_value;
+          break;
+        case 'perfect_score':
+          shouldAward = quizScore === achievement.condition_value;
+          break;
+        case 'streak':
+          shouldAward = currentStreak >= achievement.condition_value;
+          break;
+        case 'level_reached':
+          shouldAward = currentLevel >= achievement.condition_value;
+          break;
+      }
+
+      console.log('Achievement check:', achievement.name, 'should award:', shouldAward);
+
+      if (shouldAward) {
+        const { data: newAchievement, error: achievementError } = await supabase
+          .from('user_achievements')
+          .insert({
+            email_session_id: emailSessionId,
+            achievement_id: achievement.id
+          })
+          .select(`
+            *,
+            achievement:achievements(*)
+          `)
+          .single();
+
+        if (!achievementError && newAchievement) {
+          console.log('Awarded achievement:', newAchievement);
+          newAchievements.push(newAchievement);
+          
+          // Award XP bonus for achievement
+          if (achievement.xp_reward > 0) {
+            await supabase
+              .from('user_progress')
+              .update({
+                total_xp: totalXP + achievement.xp_reward,
+                updated_at: new Date().toISOString()
+              })
+              .eq('email_session_id', emailSessionId);
+
+            // Update local state with bonus XP
+            setProgress(prev => prev ? {
+              ...prev,
+              total_xp: prev.total_xp + achievement.xp_reward,
+              updated_at: new Date().toISOString()
+            } : null);
+          }
+        } else {
+          console.error('Error awarding achievement:', achievementError);
+        }
+      }
+    }
+
+    if (newAchievements.length > 0) {
+      setUserAchievements(prev => [...prev, ...newAchievements]);
+    }
+
+    return newAchievements;
   };
 
   useEffect(() => {
