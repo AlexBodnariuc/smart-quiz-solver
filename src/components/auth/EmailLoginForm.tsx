@@ -1,10 +1,11 @@
 
 import { useState } from 'react';
 import { useEmailAuth } from './EmailAuthProvider';
-import { Brain, Mail, LogIn } from 'lucide-react';
+import { Brain, Mail, Lock, LogIn } from 'lucide-react';
 
 export const EmailLoginForm = () => {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -17,7 +18,7 @@ export const EmailLoginForm = () => {
     setSuccess('');
 
     try {
-      await signInWithEmail(email);
+      await signInWithEmail(email, password);
       setSuccess('Te-ai conectat cu succes!');
     } catch (err: any) {
       setError(err.message || 'A apărut o eroare');
@@ -37,10 +38,10 @@ export const EmailLoginForm = () => {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">
-            Conectează-te cu Email
+            Conectează-te
           </h1>
           <p className="text-blue-100">
-            Introdu adresa ta de email pentru a accesa quiz-urile
+            Introdu datele tale pentru a accesa quiz-urile
           </p>
         </div>
 
@@ -61,6 +62,25 @@ export const EmailLoginForm = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/30 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                   placeholder="numele@email.com"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label htmlFor="password" className="block text-white text-sm font-medium mb-2">
+                Parola
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-blue-300" />
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/30 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                  placeholder="Introdu parola"
                   required
                 />
               </div>
@@ -103,7 +123,7 @@ export const EmailLoginForm = () => {
           {/* Info */}
           <div className="mt-6 text-center">
             <p className="text-blue-200 text-sm">
-              Nu este nevoie de parolă - doar introdu emailul pentru a accesa platforma
+              Ai nevoie de cont? Contactează administratorul pentru acces.
             </p>
           </div>
         </div>
