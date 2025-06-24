@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Brain, Plus, PlayCircle, Clock, CheckCircle, Upload, Shuffle, RefreshCw, Trash2 } from 'lucide-react';
 import { QuizData, Question } from '@/pages/Index';
@@ -43,53 +44,51 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
 
   useEffect(() => {
     loadUserSessions();
-  }, []);
-
-  useEffect(() => {
     loadAllQuestionsFromDatabase();
     loadTotalQuestionCount();
-  }, [sessions]);
+  }, []);
 
   const loadUserSessions = async () => {
+    console.log('Loading user sessions...');
     const userSessions = await getUserQuizSessions();
+    console.log('Sessions loaded:', userSessions.length);
     setSessions(userSessions);
   };
 
   const loadTotalQuestionCount = async () => {
     const count = await getTotalQuestionCount();
+    console.log('Total question count:', count);
     setTotalQuestionCount(count);
   };
 
   const loadAllQuestionsFromDatabase = async () => {
-    console.log('Loading ALL questions from entire database corpus...');
+    console.log('Loading ALL questions from database...');
     
     try {
-      // Load ALL questions from the entire database
       const questionsFromDatabase = await getAllQuestionsFromDatabase();
-      
-      console.log(`Loaded ${questionsFromDatabase.length} unique questions from entire corpus`);
+      console.log(`Loaded ${questionsFromDatabase.length} unique questions from database`);
       setAllQuestions(questionsFromDatabase);
 
-      // Removed auto-generation logic - tests will only be generated when user clicks the button
-    } catch (error) {
-      console.error('Error loading questions from database:', error);
-      
-      // Fallback to localStorage if database fails
-      const storedQuestions = localStorage.getItem('quizQuestions');
-      if (storedQuestions) {
-        try {
-          const questionData = JSON.parse(storedQuestions);
-          const quizData = parseQuizJSON(questionData, quizTitle);
-          setAllQuestions(quizData.questions);
-          console.log(`Fallback: Loaded ${quizData.questions.length} questions from localStorage`);
-        } catch (parseError) {
-          console.error('Error parsing localStorage questions:', parseError);
+      // If no questions in database, try localStorage as fallback
+      if (questionsFromDatabase.length === 0) {
+        console.log('No questions in database, checking localStorage...');
+        const storedQuestions = localStorage.getItem('quizQuestions');
+        if (storedQuestions) {
+          try {
+            const questionData = JSON.parse(storedQuestions);
+            const quizData = parseQuizJSON(questionData, quizTitle);
+            setAllQuestions(quizData.questions);
+            console.log(`Fallback: Loaded ${quizData.questions.length} questions from localStorage`);
+          } catch (parseError) {
+            console.error('Error parsing localStorage questions:', parseError);
+          }
         }
       }
+    } catch (error) {
+      console.error('Error loading questions from database:', error);
     }
   };
 
-  // Enhanced quiz generation algorithm using the ENTIRE question corpus
   const generateDiverseQuizzes = async (count: number = 6, questionsToUse?: Question[]) => {
     setIsGenerating(true);
     
@@ -97,90 +96,52 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
       const questionsSource = questionsToUse || allQuestions;
       
       if (questionsSource.length === 0) {
-        alert('Nu există întrebări disponibile pentru a genera quiz-uri.');
+        alert('Nu există întrebări disponibile pentru a genera quiz-uri. Vă rugăm să încărcați un fișier JSON cu întrebări.');
         return;
       }
 
-      // Filter out questions with no variants
       const validQuestions = questionsSource.filter(
         question => question.variants && question.variants.length > 0
       );
 
-      // Updated minimum requirement to work with smaller question sets
-      if (validQuestions.length < 150) {
-        alert(`Nu există suficiente întrebări valide. Sunt disponibile ${validQuestions.length}, dar sunt necesare cel puțin 150 pentru a genera 6 teste.`);
+      const questionsPerQuiz = Math.min(50, Math.floor(validQuestions.length / count));
+      
+      if (questionsPerQuiz < 10) {
+        alert(`Nu există suficiente întrebări valide. Sunt disponibile ${validQuestions.length}, dar sunt necesare cel puțin ${count * 10} pentru a genera ${count} teste cu câte 10 întrebări.`);
         return;
       }
 
       console.log(`Generating ${count} diverse quizzes from ${validQuestions.length} total available questions`);
 
-      // Delete existing subject quizzes first (if any)
+      // Delete existing subject quizzes first
       await deleteSubjectQuizzes();
 
-      // Create a master pool of all unique questions
-      const masterQuestionPool = [...validQuestions];
-      console.log(`Master question pool contains ${masterQuestionPool.length} questions`);
-      
-      // Generate exactly 6 quizzes with maximum diversity possible
       for (let i = 0; i < count; i++) {
-        // Create a deep shuffle of the entire pool for each quiz
-        const shuffledPool = [...masterQuestionPool]
-          .sort(() => Math.random() - 0.5)
-          .sort(() => Math.random() - 0.5); // Double shuffle for better randomization
-        
-        // Take exactly 50 questions using different starting points for each quiz
-        const quizQuestions: Question[] = [];
-        const questionsNeeded = Math.min(50, shuffledPool.length);
-        
-        // Use different starting points and step sizes for each quiz to maximize diversity
-        const startOffset = i * Math.floor(shuffledPool.length / count);
-        const stepSize = Math.max(1, Math.floor(shuffledPool.length / questionsNeeded));
-        
-        for (let j = 0; j < questionsNeeded; j++) {
-          const index = (startOffset + j * stepSize) % shuffledPool.length;
-          if (shuffledPool[index] && !quizQuestions.find(q => q.text === shuffledPool[index].text)) {
-            quizQuestions.push(shuffledPool[index]);
-          }
-        }
-        
-        // If we don't have enough unique questions, fill with random questions from the pool
-        while (quizQuestions.length < questionsNeeded) {
-          const randomQuestion = shuffledPool[Math.floor(Math.random() * shuffledPool.length)];
-          if (!quizQuestions.find(q => q.text === randomQuestion.text)) {
-            quizQuestions.push(randomQuestion);
-          } else {
-            // If we've exhausted unique questions, allow some overlap
-            quizQuestions.push(randomQuestion);
-          }
-          
-          // Safety break to prevent infinite loop
-          if (quizQuestions.length >= questionsNeeded) break;
-        }
-
-        // Final shuffle of the selected questions
-        const finalQuestions = quizQuestions.sort(() => Math.random() - 0.5);
+        // Shuffle and select questions for this quiz
+        const shuffledQuestions = [...validQuestions].sort(() => Math.random() - 0.5);
+        const startIndex = i * questionsPerQuiz;
+        const quizQuestions = shuffledQuestions.slice(startIndex, startIndex + questionsPerQuiz);
         
         const subjectNumber = i + 1;
         
         const quizData: QuizData = {
           id: `quiz-subiect-${subjectNumber}-${Date.now()}`,
           title: `Subiect ${subjectNumber}`,
-          questions: finalQuestions
+          questions: quizQuestions
         };
 
         try {
           await saveQuizSession(quizData);
-          console.log(`Generated Subiect ${subjectNumber} with ${finalQuestions.length} questions from entire corpus`);
+          console.log(`Generated Subiect ${subjectNumber} with ${quizQuestions.length} questions`);
         } catch (error) {
           console.error(`Error generating Subiect ${subjectNumber}:`, error);
         }
       }
 
-      // Refresh the sessions list and question counts
       await loadUserSessions();
       await loadTotalQuestionCount();
       
-      alert(`S-au generat ${count} quiz-uri noi cu câte ${Math.min(50, validQuestions.length)} de întrebări din întregul corpus de ${validQuestions.length} întrebări!`);
+      alert(`S-au generat ${count} quiz-uri noi cu câte ${questionsPerQuiz} întrebări!`);
     } catch (error) {
       console.error('Error generating quizzes:', error);
       alert('Eroare la generarea quiz-urilor.');
@@ -189,7 +150,6 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
     }
   };
 
-  // Function to deduplicate database questions
   const handleDeduplication = async () => {
     setIsDeduplicating(true);
     try {
@@ -217,14 +177,12 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
           const questionData = JSON.parse(storedQuestions);
           const quizData = parseQuizJSON(questionData, quizTitle);
           
-          // Save to server
           saveQuizSession(quizData).then((sessionId) => {
             console.log('Quiz saved to server with session ID:', sessionId);
             onQuizLoad(quizData, sessionId);
-            loadUserSessions(); // Refresh the sessions list
+            loadUserSessions();
           }).catch((error) => {
             console.error('Error saving quiz to server:', error);
-            // Fallback to local storage
             onQuizLoad(quizData);
           });
         } catch (error) {
@@ -270,11 +228,9 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
         
         console.log(`Uploading ${quizData.questions.length} questions from ${file.name}`);
         
-        // Save to server
         const sessionId = await saveQuizSession(quizData);
         console.log('Quiz saved to server with session ID:', sessionId);
         
-        // Refresh sessions and reload all questions
         await loadUserSessions();
         await loadAllQuestionsFromDatabase();
         await loadTotalQuestionCount();
@@ -286,7 +242,6 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
         alert('Eroare la parsarea fișierului JSON. Vă rugăm să verificați formatul.');
       } finally {
         setIsLoading(false);
-        // Reset the input
         event.target.value = '';
       }
     };
@@ -338,10 +293,9 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
     return 'Nou';
   };
 
-  // Filter to show only the first 6 generated subject quizzes
   const subjectQuizzes = sessions
     .filter(session => session.title.startsWith('Subiect'))
-    .slice(0, 6); // Show only 6 tests
+    .slice(0, 6);
   const uploadedQuizzes = sessions.filter(session => !session.title.startsWith('Subiect'));
 
   return (
@@ -371,7 +325,7 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
                 <h2 className="text-2xl font-bold text-white">Se generează testele...</h2>
               </div>
               <p className="text-purple-100">
-                Creez 6 teste diverse cu câte 50 de întrebări
+                Creez teste diverse din întrebările disponibile
               </p>
             </div>
           </div>
@@ -391,13 +345,31 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
           </div>
         )}
 
-        {/* Manual Generate Button - Always show if we have enough questions */}
-        {allQuestions.length >= 150 && (
+        {/* Database Status */}
+        <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10 mb-6">
+          <div className="text-center">
+            <h3 className="text-xl font-semibold text-white mb-2">Status Bază de Date</h3>
+            <p className="text-blue-100">
+              {allQuestions.length > 0 
+                ? `${allQuestions.length} întrebări unice disponibile în baza de date`
+                : 'Nu există întrebări în baza de date - încărcați un fișier JSON pentru a începe'
+              }
+            </p>
+            {totalQuestionCount > 0 && (
+              <p className="text-cyan-300 text-sm mt-2">
+                Total {totalQuestionCount} întrebări (inclusiv duplicate)
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Generate Tests Button - Show if we have questions */}
+        {allQuestions.length >= 30 && (
           <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 backdrop-blur-lg rounded-2xl p-8 border border-green-400/30 mb-8">
             <div className="text-center">
               <h2 className="text-3xl font-bold text-white mb-4">Generează Teste</h2>
               <p className="text-green-100 text-lg mb-6">
-                Generează 6 teste diverse cu câte 50 de întrebări!
+                Generează teste diverse din întrebările disponibile!
               </p>
               <button
                 onClick={() => generateDiverseQuizzes(6)}
@@ -405,16 +377,16 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
                 className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-blue-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
               >
                 <Shuffle className="h-6 w-6" />
-                {isGenerating ? 'Se generează...' : 'Generează 6 Teste Acum!'}
+                {isGenerating ? 'Se generează...' : 'Generează Teste Acum!'}
               </button>
             </div>
           </div>
         )}
 
-        {/* Generated Subject Quizzes - Show only if they exist */}
+        {/* Generated Subject Quizzes */}
         {subjectQuizzes.length > 0 && (
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-8">
-            <h2 className="text-3xl font-bold text-white mb-8 text-center">Teste Generate (6 teste)</h2>
+            <h2 className="text-3xl font-bold text-white mb-8 text-center">Teste Generate ({subjectQuizzes.length} teste)</h2>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {subjectQuizzes.map((session) => (
                 <div
@@ -468,17 +440,41 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
           </div>
         )}
 
-        {/* Welcome Message when no tests exist */}
-        {subjectQuizzes.length === 0 && allQuestions.length === 0 && (
-          <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-lg rounded-2xl p-8 border border-blue-400/30 mb-8 text-center">
-            <h2 className="text-3xl font-bold text-white mb-4">Începe cu Prima Încărcare</h2>
-            <p className="text-blue-100 text-lg mb-6">
-              Încarcă un fișier JSON cu întrebări pentru a începe!
-            </p>
+        {/* Uploaded Custom Quizzes */}
+        {uploadedQuizzes.length > 0 && (
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 mb-8">
+            <h2 className="text-2xl font-bold text-white mb-6 text-center">Quiz-uri Încărcate</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              {uploadedQuizzes.map((session) => (
+                <div
+                  key={session.id}
+                  className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-400/30 rounded-xl p-6 hover:bg-blue-500/30 transition-all duration-300 cursor-pointer transform hover:scale-[1.02]"
+                  onClick={() => handleLoadSession(session)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-white font-bold text-lg mb-1">{session.title}</h4>
+                      <p className="text-blue-200 text-sm mb-2">
+                        {session.total_questions} întrebări
+                      </p>
+                      <p className="text-cyan-200 text-xs">
+                        {getSessionStatus(session)}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      {getSessionIcon(session)}
+                      <p className="text-xs text-blue-300 mt-1">
+                        {formatDate(session.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Load New Questions Section - Always show */}
+        {/* Load New Questions Section */}
         <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10 mb-6">
           <div className="text-center">
             <h3 className="text-xl font-semibold text-white mb-4">Încarcă Întrebări Noi</h3>
@@ -512,22 +508,30 @@ export const QuizLoader = ({ onQuizLoad, onShowProfile }: QuizLoaderProps) => {
                 <p className="text-blue-200 text-sm">
                   Selectează un fișier JSON cu întrebări noi pentru a le adăuga la baza de date
                 </p>
+
+                {allQuestions.length === 0 && (
+                  <button
+                    onClick={handleCreateFromStorage}
+                    disabled={isLoading || storageLoading}
+                    className="w-full bg-gradient-to-r from-gray-500 to-gray-600 text-white px-6 py-3 rounded-lg font-medium hover:from-gray-600 hover:to-gray-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <PlayCircle className="h-5 w-5" />
+                    Încearcă cu Datele din LocalStorage
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* Simple Info Section */}
-        <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10">
-          <h3 className="text-lg font-semibold text-white mb-3">Despre Platformă:</h3>
-          <div className="text-blue-100 space-y-2">
-            <p>• Încarcă întrebări prin fișiere JSON</p>
-            <p>• Generează teste personalizate cu câte 50 de întrebări</p>
-            <p>• Progresul este salvat automat în cloud</p>
-            <p>• Accesează testele de pe orice dispozitiv</p>
-            <p>• Explicații detaliate pentru fiecare răspuns</p>
-            <p>• Fragmente relevante din cărțile de referință</p>
-          </div>
+        {/* Profile Button */}
+        <div className="text-center">
+          <button
+            onClick={onShowProfile}
+            className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-3 rounded-lg font-medium hover:bg-white/20 transition-all duration-300 border border-white/20"
+          >
+            Vezi Profilul
+          </button>
         </div>
       </div>
     </div>

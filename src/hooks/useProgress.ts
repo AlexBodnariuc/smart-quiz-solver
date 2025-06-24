@@ -1,6 +1,5 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 interface UserProgress {
   id: string;
@@ -40,14 +39,32 @@ export const useProgress = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Since we removed authentication, we'll use a mock progress state
   useEffect(() => {
-    console.log('useProgress effect - initializing mock progress data');
-    
-    // Set mock progress data
-    const mockProgress: UserProgress = {
-      id: 'mock-id',
-      email_session_id: 'mock-session',
+    console.log('useProgress effect - initializing progress data');
+    loadLocalProgress();
+  }, []);
+
+  const loadLocalProgress = () => {
+    // Load from localStorage or create default
+    const stored = localStorage.getItem('userProgress');
+    if (stored) {
+      try {
+        const parsedProgress = JSON.parse(stored);
+        setProgress(parsedProgress);
+        console.log('Loaded progress from localStorage:', parsedProgress);
+      } catch (error) {
+        console.error('Error parsing stored progress:', error);
+        createDefaultProgress();
+      }
+    } else {
+      createDefaultProgress();
+    }
+  };
+
+  const createDefaultProgress = () => {
+    const defaultProgress: UserProgress = {
+      id: 'local-progress',
+      email_session_id: 'local-session',
       total_xp: 0,
       current_level: 1,
       current_streak: 0,
@@ -57,19 +74,21 @@ export const useProgress = () => {
       updated_at: new Date().toISOString()
     };
 
-    setProgress(mockProgress);
-    setAchievements([]);
-    setUserAchievements([]);
-    setLoading(false);
-  }, []);
+    setProgress(defaultProgress);
+    localStorage.setItem('userProgress', JSON.stringify(defaultProgress));
+    console.log('Created default progress:', defaultProgress);
+  };
+
+  const saveProgressToLocal = (newProgress: UserProgress) => {
+    localStorage.setItem('userProgress', JSON.stringify(newProgress));
+    console.log('Saved progress to localStorage:', newProgress);
+  };
 
   const calculateLevel = (xp: number): number => {
-    // Level formula: level = floor(sqrt(xp / 100)) + 1
     return Math.floor(Math.sqrt(xp / 100)) + 1;
   };
 
   const getXpForLevel = (level: number): number => {
-    // XP needed for level: (level - 1)^2 * 100
     return Math.pow(level - 1, 2) * 100;
   };
 
@@ -116,23 +135,40 @@ export const useProgress = () => {
 
     console.log('Updated progress - New XP:', newXP, 'New Level:', newLevel);
 
-    // Update local state (without database since there's no auth)
-    setProgress(prev => prev ? {
-      ...prev,
+    const updatedProgress: UserProgress = {
+      ...progress,
       total_xp: newXP,
       current_level: newLevel,
       current_streak: newStreak,
       longest_streak: newLongestStreak,
       last_activity_date: today,
       updated_at: new Date().toISOString()
-    } : null);
+    };
 
-    return [];
+    setProgress(updatedProgress);
+    saveProgressToLocal(updatedProgress);
+
+    // Check for achievements (mock for now)
+    const newAchievements: UserAchievement[] = [];
+    
+    // Level up achievement
+    if (newLevel > progress.current_level) {
+      console.log(`Level up! From ${progress.current_level} to ${newLevel}`);
+      // Could add achievement notification here
+    }
+
+    // Streak achievements
+    if (newStreak > 0 && newStreak % 5 === 0) {
+      console.log(`Streak milestone: ${newStreak} days`);
+      // Could add streak achievement here
+    }
+
+    return newAchievements;
   };
 
   const loadProgress = async () => {
-    // Mock function for compatibility
-    console.log('loadProgress called - using mock data');
+    console.log('loadProgress called - reloading from localStorage');
+    loadLocalProgress();
   };
 
   return {
