@@ -2,15 +2,12 @@
 import { ProgressDisplay } from '@/components/ProgressDisplay';
 import { AchievementsList } from '@/components/AchievementsList';
 import { User, ArrowLeft } from 'lucide-react';
-import { useEmailAuth } from '@/components/auth/EmailAuthProvider';
 
 interface ProfileProps {
   onBack: () => void;
 }
 
 export const Profile = ({ onBack }: ProfileProps) => {
-  const { session } = useEmailAuth();
-
   return (
     <div className="min-h-screen p-6">
       <div className="max-w-4xl mx-auto">
@@ -31,13 +28,11 @@ export const Profile = ({ onBack }: ProfileProps) => {
             <div></div>
           </div>
           
-          {session && (
-            <div className="text-center">
-              <p className="text-blue-100">
-                Conectat ca: <span className="font-medium text-white">{session.email}</span>
-              </p>
-            </div>
-          )}
+          <div className="text-center">
+            <p className="text-blue-100">
+              Progresul local - fără autentificare
+            </p>
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
