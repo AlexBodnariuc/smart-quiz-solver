@@ -1,15 +1,16 @@
 
 import { useState } from 'react';
 import { useEmailAuth } from './EmailAuthProvider';
-import { Brain, Mail, Lock, LogIn } from 'lucide-react';
+import { Brain, Mail, Lock, LogIn, UserPlus } from 'lucide-react';
 
 export const EmailLoginForm = () => {
+  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const { signInWithEmail } = useEmailAuth();
+  const { signInWithEmail, signUpWithEmail } = useEmailAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,8 +19,13 @@ export const EmailLoginForm = () => {
     setSuccess('');
 
     try {
-      await signInWithEmail(email, password);
-      setSuccess('Te-ai conectat cu succes!');
+      if (isLogin) {
+        await signInWithEmail(email, password);
+        setSuccess('Te-ai conectat cu succes!');
+      } else {
+        await signUpWithEmail(email, password);
+        setSuccess('Contul a fost creat cu succes! Te-ai conectat automat.');
+      }
     } catch (err: any) {
       setError(err.message || 'A apărut o eroare');
     } finally {
@@ -38,10 +44,12 @@ export const EmailLoginForm = () => {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">
-            Conectează-te
+            {isLogin ? 'Conectează-te' : 'Creează cont'}
           </h1>
           <p className="text-blue-100">
-            Introdu datele tale pentru a accesa quiz-urile
+            {isLogin 
+              ? 'Introdu datele tale pentru a accesa quiz-urile' 
+              : 'Creează un cont nou pentru a începe'}
           </p>
         </div>
 
@@ -80,7 +88,7 @@ export const EmailLoginForm = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/30 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  placeholder="Introdu parola"
+                  placeholder={isLogin ? "Introdu parola" : "Alege o parolă"}
                   required
                 />
               </div>
@@ -113,18 +121,36 @@ export const EmailLoginForm = () => {
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
-                  <LogIn className="h-5 w-5" />
-                  Conectează-te
+                  {isLogin ? (
+                    <>
+                      <LogIn className="h-5 w-5" />
+                      Conectează-te
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-5 w-5" />
+                      Creează cont
+                    </>
+                  )}
                 </div>
               )}
             </button>
           </form>
 
-          {/* Info */}
+          {/* Toggle Form */}
           <div className="mt-6 text-center">
-            <p className="text-blue-200 text-sm">
-              Ai nevoie de cont? Contactează administratorul pentru acces.
-            </p>
+            <button
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError('');
+                setSuccess('');
+              }}
+              className="text-cyan-300 hover:text-cyan-200 transition-colors"
+            >
+              {isLogin 
+                ? 'Nu ai cont? Creează unul aici' 
+                : 'Ai deja cont? Conectează-te aici'}
+            </button>
           </div>
         </div>
       </div>
